@@ -79,7 +79,7 @@ cairo_check_event(cairo_surface_t *sfc, int block)
             XNextEvent(cairo_xlib_surface_get_display(sfc), &e);
         else
             return 0;
-    
+
         switch (e.type)
         {
             case ButtonPress:
@@ -101,9 +101,31 @@ void destroy(cairo_surface_t *sfc)
     XCloseDisplay(dsp);
 }
 
+void help()
+{
+    printf("hello\n");
+    exit(0);
+}
+
 int
 main (int argc, char *argv[])
 {
+    char *string;
+    char *font;
+    int   margin;
+
+    int opt;
+    while ((opt = getopt(argc, argv, "hs:f:m:")) != -1) {
+        switch(opt)
+        {
+            case 'h': help(); break;
+            case 's': string = optarg; break;
+            case 'f': font = optarg;  break;
+            case 'm': margin = strtol(optarg, NULL, 10); break;
+            default: help();
+        }
+    }
+
     cairo_surface_t *surface;
     cairo_t *context;
     cairo_text_extents_t text;
@@ -114,16 +136,22 @@ main (int argc, char *argv[])
     int running;
     for (running = 1; running == 1;)
     {
-        cairo_set_source_rgb(context, 1, 1, 1);
-        cairo_paint(context);
         cairo_set_source_rgb(context, 0, 0, 0);
-        cairo_select_font_face(context, "tewi",
-                CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+        cairo_paint(context);
+
+
+        cairo_set_source_rgb(context, 1, 1, 1);
+        cairo_select_font_face(context, font,
+                CAIRO_FONT_SLANT_OBLIQUE, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_font_size(context, 11);
-        cairo_text_extents(context, "ahhhhhhhh", &text);
-        cairo_move_to(context, 0, text.height);
-        cairo_show_text(context, "ahhhhhhhh");
+        cairo_text_extents(context, string, &text);
+
+
+        cairo_move_to(context, margin, text.height);
+        cairo_show_text(context, string);
         cairo_surface_flush(surface);
+
+
         switch (cairo_check_event(surface, 0))
         {
             case 0xff53:    // right cursor
