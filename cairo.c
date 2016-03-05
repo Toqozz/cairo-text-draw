@@ -12,7 +12,6 @@
 
 static void x_set_wm(Window win, Display *dsp)
 {
-    int retval;
     Atom  property[2];
 
     char *title = "yarn";
@@ -30,14 +29,12 @@ static void x_set_wm(Window win, Display *dsp)
     property[0] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_NOTIFICATION", false);
     property[1] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_UTILITY", false);
 
-    retval = XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 2L);
-    printf("returned %d\n", retval);
+    XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 2L);
 
     Atom net_wm_state =
         XInternAtom(dsp, "_NET_WM_STATE", false);
     property[0] = XInternAtom(dsp, "_NET_WM_STATE_ABOVE", false);
-    retval = XChangeProperty(dsp, win, net_wm_state, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
-    printf("returned %d\n", retval);
+    XChangeProperty(dsp, win, net_wm_state, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
     //XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &hints, 5);
 }
 
@@ -103,51 +100,75 @@ void destroy(cairo_surface_t *sfc)
 
 void help()
 {
-    printf("hello\n");
+    printf("basic window making and text printing.\n"
+           "usage: cairo [-h | -s | -f | -m | -l | -w]\n"
+           "        -h Show this help\n"
+           "        -s String to print\n"
+           "        -f Font to use\n"
+           "        -m Distance from the left side of the window\n"
+           "        -u Distance text is placed from the top of the window\n"
+           "        -l Length of the window\n"
+           "        -w Width of the window\n"
+           );
     exit(0);
 }
 
 int
 main (int argc, char *argv[])
 {
+    char *font = NULL;
     char *string;
-    char *font;
-    int   margin;
+    bool  italic = false;
+    int   width = 30;
+    int   length = 300;
+    int   margin = -1;
+    int   upper = -1;
 
     int opt;
-    while ((opt = getopt(argc, argv, "hs:f:m:")) != -1) {
+    while ((opt = getopt(argc, argv, "hs:f:m:u:w:l:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
             case 's': string = optarg; break;
             case 'f': font = optarg;  break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
+            case 'u': upper = strtol(optarg, NULL, 10);  break;
+            case 'l': length = strtol(optarg, NULL, 10); break;
+            case 'w': width = strtol(optarg, NULL, 10); break;
+            case 'i': italic = true; break;
             default: help();
         }
     }
+
+    // Option checking.
+    if (!font) printf("Font is required\n");
+    if (margin < 0) margin = 5;
+    if (upper < 0) upper = 5;
+    printf("italic: %d\n", italic);
 
     cairo_surface_t *surface;
     cairo_t *context;
     cairo_text_extents_t text;
 
-    surface = cairo_create_x11_surface0(400, 400);
+    surface = cairo_create_x11_surface0(length, width);
     context = cairo_create(surface);
 
     int running;
     for (running = 1; running == 1;)
     {
-        cairo_set_source_rgb(context, 0, 0, 0);
+        cairo_set_source_rgb(context, 1, 1, 1);
         cairo_paint(context);
 
 
-        cairo_set_source_rgb(context, 1, 1, 1);
+        cairo_set_source_rgb(context, 0, 0, 0);
         cairo_select_font_face(context, font,
-                CAIRO_FONT_SLANT_OBLIQUE, CAIRO_FONT_WEIGHT_NORMAL);
+                (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_font_size(context, 11);
         cairo_text_extents(context, string, &text);
 
 
-        cairo_move_to(context, margin, text.height);
+
+        cairo_move_to(context, margin, text.height + upper);
         cairo_show_text(context, string);
         cairo_surface_flush(surface);
 
