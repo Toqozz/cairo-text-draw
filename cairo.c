@@ -15,24 +15,22 @@ static void x_set_wm(Window win, Display *dsp)
     Atom  property[2];
 
     char *title = "yarn";
-    Atom _net_wm_title =
-        XInternAtom(dsp, "_NET_WM_NAME", false);
+    Atom _net_wm_title = XInternAtom(dsp, "_NET_WM_NAME", false);
+    // Set or read a window's WM_NAME property.
     XStoreName(dsp, win, title);
-    XChangeProperty(dsp, win, _net_wm_title, XInternAtom(dsp, "UTF8_STRING", False), 8, PropModeReplace, (unsigned char *) title, strlen(title));
+    XChangeProperty(dsp, win, _net_wm_title, XInternAtom(dsp, "UTF8_STRING", false), 8, PropModeReplace, (unsigned char *) title, strlen(title));
 
     char *class = "yarn";
     XClassHint classhint = { class, "yarn" };
     XSetClassHint(dsp, win, &classhint);
 
-    Atom net_wm_window_type =
-        XInternAtom(dsp, "_NET_WM_WINDOW_TYPE", false);
+    Atom net_wm_window_type = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE", false);
     property[0] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_NOTIFICATION", false);
     property[1] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_UTILITY", false);
 
     XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 2L);
 
-    Atom net_wm_state =
-        XInternAtom(dsp, "_NET_WM_STATE", false);
+    Atom net_wm_state = XInternAtom(dsp, "_NET_WM_STATE", false);
     property[0] = XInternAtom(dsp, "_NET_WM_STATE_ABOVE", false);
     XChangeProperty(dsp, win, net_wm_state, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
     //XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &hints, 5);
@@ -167,7 +165,6 @@ main (int argc, char *argv[])
         cairo_text_extents(context, string, &text);
 
 
-
         cairo_move_to(context, margin, text.height + upper);
         cairo_show_text(context, string);
         cairo_surface_flush(surface);
@@ -178,11 +175,11 @@ main (int argc, char *argv[])
             case 0xff53:    // right cursor
                 fprintf(stderr, "right cursor pressed");
                 break;
-    
+
             case 0xff51:    // left cursor
-                fprintf(stderr, "left cursor pressed");
+                fprintf(stderr, "left cursor pressed"); //wtf is a cursor compared to a mouse button.
                 break;
-    
+
             case 0xff1b:    // esc
             case -1:        // left mouse button
                 fprintf(stderr, "left mouse button");
