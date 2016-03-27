@@ -9,6 +9,25 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
+
+const int interval = 33; //half a second
+
+
+void help()
+{
+    printf("basic window making and text printing.\n"
+           "usage: cairo [-h | -s | -f | -m | -l | -w]\n"
+           "        -h Show this help\n"
+           "        -s String to print\n"
+           "        -f Font to use\n"
+           "        -m Distance from the left side of the window\n"
+           "        -u Distance text is placed from the top of the window\n"
+           "        -l Length of the window\n"
+           "        -w Width of the window\n"
+           );
+    exit(0);
+}
 
 static void x_set_wm(Window win, Display *dsp)
 {
@@ -96,19 +115,33 @@ void destroy(cairo_surface_t *sfc)
     XCloseDisplay(dsp);
 }
 
-void help()
+void animate(cairo_surface_t *surface, cairo_t *context, cairo_text_extents_t text, char *font, char *string)
 {
-    printf("basic window making and text printing.\n"
-           "usage: cairo [-h | -s | -f | -m | -l | -w]\n"
-           "        -h Show this help\n"
-           "        -s String to print\n"
-           "        -f Font to use\n"
-           "        -m Distance from the left side of the window\n"
-           "        -u Distance text is placed from the top of the window\n"
-           "        -l Length of the window\n"
-           "        -w Width of the window\n"
-           );
-    exit(0);
+    cairo_push_group(context);
+
+    cairo_pop_group_to_source(context);
+    cairo_surface_flush(surface);
+}
+
+void parse(char *wxh, int *width, int *height)
+{
+    char *w;
+    char *h;
+    // We need something that is mutable.
+    char *dupe = strdup(wxh);
+    // If memeory got.
+    if (dupe != NULL)
+    {
+        // ex. "500x10"
+        w = strsep(&dupe, "x");         // w = "500", dupe = "10"
+        h = strsep(&dupe, "x");         // h = "10", dupe = ""
+        free(dupe);                     // still contains null terminator?
+
+        // Change variables 'globally' in memory. (*width and *height have memory addresses from main.).
+        *width = strtol(w, NULL, 10);   // change value width is pointing to to something else.
+        *height = strtol(h, NULL, 10);  // ""
+    }
+
 }
 
 int
@@ -116,14 +149,15 @@ main (int argc, char *argv[])
 {
     char *font = NULL;
     char *string;
+    char *dimensions;
     bool  italic = false;
-    int   width = 30;
-    int   length = 300;
     int   margin = -1;
     int   upper = -1;
+    int   width = 300;
+    int   height = 300;
 
     int opt;
-    while ((opt = getopt(argc, argv, "hs:f:m:u:w:l:i")) != -1) {
+    while ((opt = getopt(argc, argv, "hs:f:m:u:d:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
@@ -131,8 +165,7 @@ main (int argc, char *argv[])
             case 'f': font = optarg;  break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
-            case 'l': length = strtol(optarg, NULL, 10); break;
-            case 'w': width = strtol(optarg, NULL, 10); break;
+            case 'd': dimensions = optarg; break;
             case 'i': italic = true; break;
             default: help();
         }
@@ -142,33 +175,54 @@ main (int argc, char *argv[])
     if (!font) printf("Font is required\n");
     if (margin < 0) margin = 5;
     if (upper < 0) upper = 5;
-    printf("italic: %d\n", italic);
+
+    parse(dimensions, &width, &height);
+    printf("width is: %d\nheight is: %d\n", width, height);
 
     cairo_surface_t *surface;
     cairo_t *context;
     cairo_text_extents_t text;
 
-    surface = cairo_create_x11_surface0(length, width);
+    surface = cairo_create_x11_surface0(width, height);
     context = cairo_create(surface);
+    cairo_set_source_rgb(context, 1,1,1);
+    cairo_paint(context);
 
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = interval*1000000;
+
+    int i = 0;
     int running;
     for (running = 1; running == 1;)
     {
-        cairo_set_source_rgb(context, 1, 1, 1);
+        // Clean the previous paint.
+        cairo_set_source_rgb(context, 1,1,1);
         cairo_paint(context);
 
+        // Create a new push group.
+        cairo_push_group(context);
 
         cairo_set_source_rgb(context, 0, 0, 0);
+
+        // Italic? y/n.
         cairo_select_font_face(context, font,
                 (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+
+        // Text rectangle.
         cairo_set_font_size(context, 11);
         cairo_text_extents(context, string, &text);
 
-
-        cairo_move_to(context, margin, text.height + upper);
+        // Make the source contain the text.
+        cairo_move_to(context, margin+i, text.height + upper);
         cairo_show_text(context, string);
-        cairo_surface_flush(surface);
 
+        // Pop the group to source.
+        cairo_pop_group_to_source(context);
+
+        // Paint the source.
+        cairo_paint(context);
+        cairo_surface_flush(surface);
 
         switch (cairo_check_event(surface, 0))
         {
@@ -186,7 +240,9 @@ main (int argc, char *argv[])
                 running = 0;
                 break;
         }
-        sleep(1);
+        // Sleep for 33.3ms (30fps).
+        nanosleep(&req, &req);
+        i++;
     }
 
     cairo_destroy(context);
