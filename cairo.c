@@ -10,8 +10,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
-const int interval = 33; //half a second
 
 
 void help()
@@ -66,8 +66,8 @@ cairo_create_x11_surface0(int x, int y)
     if ((dsp = XOpenDisplay(NULL)) == NULL)
         exit(1);
     screen = DefaultScreen(dsp);
-    da = XCreateSimpleWindow(dsp, DefaultRootWindow(dsp),
-            100,100,x,y,0,0,0);
+    da = XCreateWindow(dsp, DefaultRootWindow(dsp),
+            100,400,x,y,0,CopyFromParent,CopyFromParent,CopyFromParent,0,0);
     x_set_wm(da, dsp);
     XSelectInput(dsp, da, ButtonPressMask | KeyPressMask);
     XMapWindow(dsp, da);
@@ -115,14 +115,6 @@ void destroy(cairo_surface_t *sfc)
     XCloseDisplay(dsp);
 }
 
-void animate(cairo_surface_t *surface, cairo_t *context, cairo_text_extents_t text, char *font, char *string)
-{
-    cairo_push_group(context);
-
-    cairo_pop_group_to_source(context);
-    cairo_surface_flush(surface);
-}
-
 void parse(char *wxh, int *width, int *height)
 {
     char *w;
@@ -144,24 +136,51 @@ void parse(char *wxh, int *width, int *height)
 
 }
 
+// Modified from http://cairographics.org/samples/rounded_rectangle/
+void rounded_rectangle(double x, double y,
+                       double width, double height,
+                       double aspect, double corner_radius,
+                       cairo_t *context,
+                       double r, double g,
+                       double b, double a)
+{
+    double radius = corner_radius / aspect;
+    double degrees = M_PI / 180.0;
+
+    cairo_new_sub_path(context);
+    cairo_arc(context, x + width - radius, y + radius, radius, -90 * degrees, 0 * degrees);
+    cairo_arc(context, x + width - radius, y + height - radius, radius, 0 * degrees, 90 * degrees);
+    cairo_arc(context, x + radius, y + height - radius, radius, 90 * degrees, 180 * degrees);
+    cairo_arc(context, x + radius, y + radius, radius, 180 * degrees, 270 * degrees);
+    cairo_close_path(context);
+
+    cairo_set_source_rgba(context, r, g, b, a);
+    cairo_fill(context);
+}
+
+const int interval = 16.5; //60fps == 16.5
+
 int
 main (int argc, char *argv[])
 {
     char *font = NULL;
-    char *string;
+    //char *string;
+    char *string = NULL;
     char *dimensions;
     bool  italic = false;
     int   margin = -1;
     int   upper = -1;
     int   width = 300;
     int   height = 300;
+    int   read;
+    unsigned long len;
 
     int opt;
-    while ((opt = getopt(argc, argv, "hs:f:m:u:d:i")) != -1) {
+    while ((opt = getopt(argc, argv, "hf:m:u:d:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
-            case 's': string = optarg; break;
+            //case 's': string = optarg; break;
             case 'f': font = optarg;  break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
@@ -171,58 +190,112 @@ main (int argc, char *argv[])
         }
     }
 
+    // Read stdin.
+    read = getline(&string, &len, stdin);
+    if (-1 != read)
+        puts(string);
+    else
+        printf("No input read...\n");
+
     // Option checking.
     if (!font) printf("Font is required\n");
     if (margin < 0) margin = 5;
     if (upper < 0) upper = 5;
-
     parse(dimensions, &width, &height);
-    printf("width is: %d\nheight is: %d\n", width, height);
 
     cairo_surface_t *surface;
     cairo_t *context;
+    cairo_pattern_t *pattern;
     cairo_text_extents_t text;
+
+    // TODO, give up on rectangles....
 
     surface = cairo_create_x11_surface0(width, height);
     context = cairo_create(surface);
-    cairo_set_source_rgb(context, 1,1,1);
-    cairo_paint(context);
+    pattern = cairo_pattern_create_rgba(1,0.5,0,0.1);
 
     struct timespec req;
     req.tv_sec = 0;
     req.tv_nsec = interval*1000000;
 
-    int i = 0;
     int running;
+    int i = 0;
+    int enter = -width-1;
     for (running = 1; running == 1;)
     {
-        // Clean the previous paint.
-        cairo_set_source_rgb(context, 1,1,1);
-        cairo_paint(context);
+        if (enter < 0) {
+            // "Animation".
+            enter++;
+            enter = enter/1.05;
 
-        // Create a new push group.
-        cairo_push_group(context);
+            // Create a new push group.
+            cairo_push_group(context);
 
-        cairo_set_source_rgb(context, 0, 0, 0);
+            // Rounded rectangle that slides out >>.
+            rounded_rectangle(enter, 0, width, height, 1, 10, context, 1,0.5,0,1);
 
-        // Italic? y/n.
-        cairo_select_font_face(context, font,
-                (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+            cairo_set_source_rgba(context, 0,0,0,1);
 
-        // Text rectangle.
-        cairo_set_font_size(context, 11);
-        cairo_text_extents(context, string, &text);
+            // Italic? y/n.
+            cairo_select_font_face(context, font,
+                    (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
 
-        // Make the source contain the text.
-        cairo_move_to(context, margin+i, text.height + upper);
-        cairo_show_text(context, string);
+            // Text rectangle.
+            cairo_set_font_size(context, 11);
+            cairo_text_extents(context, string, &text);
 
-        // Pop the group to source.
-        cairo_pop_group_to_source(context);
+            // Make the source contain the text.
+            cairo_move_to(context, enter, text.height + upper);
+            cairo_show_text(context, string);
 
-        // Paint the source.
-        cairo_paint(context);
-        cairo_surface_flush(surface);
+            // Pop the group to source.
+            cairo_pop_group_to_source(context);
+
+            // Paint the source.
+            //cairo_paint_with_alpha(context, 1);
+            cairo_mask(context, pattern);
+            cairo_surface_flush(surface);
+
+        }
+        else {
+            //cairo_set_operator(context, CAIRO_OPERATOR_CLEAR);
+            //rounded_rectangle(0, 0, width, height, 1, 10, context, 1,0.5,0,1);
+            //cairo_set_operator(context, CAIRO_OPERATOR_OVER);
+
+            // Create a new push group.
+            cairo_push_group(context);
+
+            // Rounded rectangle that stays.
+            rounded_rectangle(0, 0, width, height, 1, 10, context, 1,0.5,0,1);
+
+            cairo_set_source_rgba(context, 0,0,0,1);
+            //cairo_set_operator(context, CAIRO_OPERATOR_OVER);
+
+            // Italic? y/n.
+            cairo_select_font_face(context, font,
+                    (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+
+            // Text rectangle.
+            cairo_set_font_size(context, 11);
+            cairo_text_extents(context, string, &text);
+
+            // Make the source contain the text.
+            cairo_set_source_rgba(context, 0,0,0,1);
+            cairo_move_to(context, enter, text.height + upper);
+            cairo_show_text(context, string);
+
+            // Pop the group to source.
+            cairo_pop_group_to_source(context);
+
+            // Paint the source.
+            //cairo_paint_with_alpha(context, 1);
+            cairo_mask(context, pattern);
+            cairo_surface_flush(surface);
+
+            // "Scroll".
+            enter++;
+        }
+
 
         switch (cairo_check_event(surface, 0))
         {
@@ -240,6 +313,7 @@ main (int argc, char *argv[])
                 running = 0;
                 break;
         }
+        cairo_set_source_rgba(context, 0,0,0,0);
         // Sleep for 33.3ms (30fps).
         nanosleep(&req, &req);
         i++;
