@@ -62,19 +62,21 @@ x_set_wm(Window win, Display *dsp)
 }
 
 cairo_surface_t *
-cairo_create_x11_surface0(int x, int y)
+cairo_create_x11_surface(int x, int y)
 {
-    int screen;
+    int screen;   // Screen #.
     cairo_surface_t *surface;
     Display *display;
-    Drawable draw;
+    Drawable drawable;
 
     // Error if no open..
     if ((display = XOpenDisplay(NULL)) == NULL)   // Set dsp though.
         exit(1);
 
     XVisualInfo vinfo;
-    screen = DefaultScreen(display);
+    screen = DefaultScreen(display);   // Use primary display.
+    //printf("%d", screen);
+    // Match the display settings.
     XMatchVisualInfo(display, screen, 32, TrueColor, &vinfo);
 
     XSetWindowAttributes attr;
@@ -83,16 +85,24 @@ cairo_create_x11_surface0(int x, int y)
     attr.border_pixel = 0;
     attr.background_pixel = 0;
 
-    draw = XCreateWindow(display, DefaultRootWindow(display),
-            100,400,x,y,0,vinfo.depth,InputOutput, vinfo.visual,CWColormap | CWBorderPixel | CWBackPixel,&attr);
-    x_set_wm(draw, display);
-    XSelectInput(display, draw, ButtonPressMask | KeyPressMask);
-    XMapWindow(display, draw);
+    drawable = XCreateWindow(display, DefaultRootWindow(display),  // Returns a window (a drawable place).
+            100,400, // Position on screen.
+            x,y,     // Width, Height.
+            0,       // Border width.
+            vinfo.depth, InputOutput, vinfo.visual,   // Depth, Class, Visual type.
+            CWColormap | CWBorderPixel | CWBackPixel, // Overwritten attributes.
+            &attr);
 
-    surface = cairo_xlib_surface_create(display, draw,
+    // Apply the Atoms to the new window.
+    // Request that the X server report these events.
+    x_set_wm(drawable, display);
+    XSelectInput(display, drawable, ButtonPressMask | KeyPressMask);
+    XMapWindow(display, drawable);
+
+    // Finally create a surface from the window.
+    surface = cairo_xlib_surface_create(display, drawable,
             DefaultVisual(display, screen), x, y);
     cairo_xlib_surface_set_size(surface, x, y);
-
 
     return surface;
 }
@@ -227,7 +237,7 @@ main (int argc, char *argv[])
 
     // TODO, give up on rectangles....
 
-    surface = cairo_create_x11_surface0(width, height);
+    surface = cairo_create_x11_surface(width, height);
     /*
     context = cairo_create(surface);
     pattern = cairo_pattern_create_rgba(1,0.5,0,0.1);
