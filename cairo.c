@@ -36,6 +36,7 @@ x_set_wm(Window win, Display *dsp)
     // Set window's WM_NAME property.
     // char *title = "yarn"; -- only used twice.
     XStoreName(dsp, win, "yarn");
+    // No children.
     property[2] = XInternAtom(dsp, "_NET_WM_NAME", false); // Get WM_NAME atom and store it in _net_wm_title.
     XChangeProperty(dsp, win, property[2], XInternAtom(dsp, "UTF8_STRING", false), 8, PropModeReplace, (unsigned char *) "yarn", 4);
 
@@ -45,59 +46,55 @@ x_set_wm(Window win, Display *dsp)
     XSetClassHint(dsp, win, &classhint);
 
     // Parent.
-    property[2] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE", false);   // Let WM know types.
+    property[2] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE", false);   // Let WM know type.
     // Children.
     property[0] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_NOTIFICATION", false);
     property[1] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_UTILITY", false);
-
     // Reach for 2 longs, (2L).
     XChangeProperty(dsp, win, property[2], XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 2L);
 
     // Parent.
-    property[2] = XInternAtom(dsp, "_NET_WM_STATE", false);
+    property[2] = XInternAtom(dsp, "_NET_WM_STATE", false);   // Let WM know state.
     // Child.
     property[0] = XInternAtom(dsp, "_NET_WM_STATE_ABOVE", false);
-
     // Reach for 1 long, (1L).
     XChangeProperty(dsp, win, property[2], XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
-
-    // TODO, remove?
-    //XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &hints, 5);
 }
 
 cairo_surface_t *
 cairo_create_x11_surface0(int x, int y)
 {
-    Display *dsp;
-    Drawable da;
     int screen;
-    cairo_surface_t *sfc;
+    cairo_surface_t *surface;
+    Display *display;
+    Drawable draw;
 
-    if ((dsp = XOpenDisplay(NULL)) == NULL)
+    // Error if no open..
+    if ((display = XOpenDisplay(NULL)) == NULL)   // Set dsp though.
         exit(1);
 
     XVisualInfo vinfo;
-    screen = DefaultScreen(dsp);
-    XMatchVisualInfo(dsp, screen, 32, TrueColor, &vinfo);
+    screen = DefaultScreen(display);
+    XMatchVisualInfo(display, screen, 32, TrueColor, &vinfo);
 
     XSetWindowAttributes attr;
     // We need all 3 of these attributes, or BadMatch: http://stackoverflow.com/questions/3645632/how-to-create-a-window-with-a-bit-depth-of-32
-    attr.colormap = XCreateColormap(dsp, DefaultRootWindow(dsp), vinfo.visual, AllocNone);
+    attr.colormap = XCreateColormap(display, DefaultRootWindow(display), vinfo.visual, AllocNone);
     attr.border_pixel = 0;
     attr.background_pixel = 0;
 
-    da = XCreateWindow(dsp, DefaultRootWindow(dsp),
+    draw = XCreateWindow(display, DefaultRootWindow(display),
             100,400,x,y,0,vinfo.depth,InputOutput, vinfo.visual,CWColormap | CWBorderPixel | CWBackPixel,&attr);
-    x_set_wm(da, dsp);
-    XSelectInput(dsp, da, ButtonPressMask | KeyPressMask);
-    XMapWindow(dsp, da);
+    x_set_wm(draw, display);
+    XSelectInput(display, draw, ButtonPressMask | KeyPressMask);
+    XMapWindow(display, draw);
 
-    sfc = cairo_xlib_surface_create(dsp, da,
-            DefaultVisual(dsp, screen), x, y);
-    cairo_xlib_surface_set_size(sfc, x, y);
+    surface = cairo_xlib_surface_create(display, draw,
+            DefaultVisual(display, screen), x, y);
+    cairo_xlib_surface_set_size(surface, x, y);
 
 
-    return sfc;
+    return surface;
 }
 
 int
