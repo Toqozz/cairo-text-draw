@@ -28,6 +28,7 @@ void help()
     exit(0);
 }
 
+// Apply atoms to window.
 static void 
 x_set_wm(Window win, Display *dsp)
 {
@@ -61,21 +62,21 @@ x_set_wm(Window win, Display *dsp)
     XChangeProperty(dsp, win, property[2], XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
 }
 
+// Map window and return surface for that window.
 cairo_surface_t *
 cairo_create_x11_surface(int x, int y)
 {
-    int screen;   // Screen #.
-    cairo_surface_t *surface;
     Display *display;
     Drawable drawable;
+    int screen;   // Screen #.
+    cairo_surface_t *surface;
 
     // Error if no open..
-    if ((display = XOpenDisplay(NULL)) == NULL)   // Set dsp though.
+    if ((display = XOpenDisplay(NULL)) == NULL)   // Set display though.
         exit(1);
 
-    XVisualInfo vinfo;
     screen = DefaultScreen(display);   // Use primary display.
-    //printf("%d", screen);
+    XVisualInfo vinfo;
     // Match the display settings.
     XMatchVisualInfo(display, screen, 32, TrueColor, &vinfo);
 
@@ -96,17 +97,18 @@ cairo_create_x11_surface(int x, int y)
     // Apply the Atoms to the new window.
     // Request that the X server report these events.
     x_set_wm(drawable, display);
-    XSelectInput(display, drawable, ButtonPressMask | KeyPressMask);
+    XSelectInput(display, drawable, ExposureMask | ButtonPressMask | KeyPressMask);
     XMapWindow(display, drawable);
 
     // Finally create a surface from the window.
     surface = cairo_xlib_surface_create(display, drawable,
-            DefaultVisual(display, screen), x, y);
+            vinfo.visual, x, y);
     cairo_xlib_surface_set_size(surface, x, y);
 
     return surface;
 }
 
+// Respond properly to events.
 int
 cairo_check_event(cairo_surface_t *sfc, int block)
 {
@@ -123,6 +125,8 @@ cairo_check_event(cairo_surface_t *sfc, int block)
 
         switch (e.type)
         {
+            case Expose:
+                fprintf(stderr, "hey, we are exposed.\n");
             case ButtonPress:
                 return -e.xbutton.button;
             case KeyPress:
@@ -191,7 +195,6 @@ int
 main (int argc, char *argv[])
 {
     char *font = NULL;
-    //char *string;
     char *string = NULL;
     char *dimensions;
     bool  italic = false;
@@ -207,7 +210,6 @@ main (int argc, char *argv[])
         switch(opt)
         {
             case 'h': help(); break;
-            //case 's': string = optarg; break;
             case 'f': font = optarg;  break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
@@ -232,15 +234,10 @@ main (int argc, char *argv[])
 
     cairo_surface_t *surface;
     cairo_t *context;
-    cairo_pattern_t *pattern;
     cairo_text_extents_t text;
 
-    // TODO, give up on rectangles....
-
     surface = cairo_create_x11_surface(width, height);
-    /*
     context = cairo_create(surface);
-    pattern = cairo_pattern_create_rgba(1,0.5,0,0.1);
 
     struct timespec req;
     req.tv_sec = 0;
@@ -249,8 +246,32 @@ main (int argc, char *argv[])
     int running;
     int i = 0;
     int enter = -width-1;
+
+
+    //cairo_set_source_rgba(context, 1,1,1,1);
+    cairo_paint(context);
+
     for (running = 1; running == 1;)
     {
+        switch (cairo_check_event(surface, 0))
+        {
+            case 0xff53:    // right cursor
+                fprintf(stderr, "right cursor pressed");
+                break;
+
+            case 0xff51:    // left cursor
+                fprintf(stderr, "left cursor pressed"); //wtf is a cursor compared to a mouse button.
+                break;
+
+            case 0xff1b:    // esc
+            case -1:        // left mouse button
+                fprintf(stderr, "left mouse button");
+                running = 0;
+                break;
+        }
+        sleep(1);
+    }
+        /*
         if (enter < 0) {
             // "Animation".
             enter++;
@@ -323,36 +344,22 @@ main (int argc, char *argv[])
             // "Scroll".
             enter++;
         }
+    */
 
 
+//TODO WORKING!!!
+//something to do with being in the runnig loop, you have to do it that way!
 
-        switch (cairo_check_event(surface, 0))
-        {
-            case 0xff53:    // right cursor
-                fprintf(stderr, "right cursor pressed");
-                break;
-
-            case 0xff51:    // left cursor
-                fprintf(stderr, "left cursor pressed"); //wtf is a cursor compared to a mouse button.
-                break;
-
-            case 0xff1b:    // esc
-            case -1:        // left mouse button
-                fprintf(stderr, "left mouse button");
-                running = 0;
-                break;
-        }
-        cairo_set_source_rgba(context, 0,0,0,0);
+        //cairo_set_source_rgba(context, 0,0,0,0);
         // Sleep for 33.3ms (30fps).
-        nanosleep(&req, &req);
-        i++;
-    }
+        //nanosleep(&req, &req);
+        //i++;
+    //}
 
+    //sleep(10);
 
-    cairo_destroy(context);
-    destroy(surface);
+    //cairo_destroy(cr);
+    //destroy(sfc);
 
     return 0;
-*/
-    sleep(10);
 }
