@@ -12,8 +12,7 @@
 #include <time.h>
 #include <math.h>
 
-
-
+// Please save me, this time I cannot run.
 void help()
 {
     printf("basic window making and text printing.\n"
@@ -29,29 +28,40 @@ void help()
     exit(0);
 }
 
-static void x_set_wm(Window win, Display *dsp)
+static void 
+x_set_wm(Window win, Display *dsp)
 {
-    Atom  property[2];
+    Atom property[3];  // Change 2 things at once, (parent + 2 children).
 
-    char *title = "yarn";
-    Atom _net_wm_title = XInternAtom(dsp, "_NET_WM_NAME", false);
-    // Set or read a window's WM_NAME property.
-    XStoreName(dsp, win, title);
-    XChangeProperty(dsp, win, _net_wm_title, XInternAtom(dsp, "UTF8_STRING", false), 8, PropModeReplace, (unsigned char *) title, strlen(title));
+    // Set window's WM_NAME property.
+    // char *title = "yarn"; -- only used twice.
+    XStoreName(dsp, win, "yarn");
+    property[2] = XInternAtom(dsp, "_NET_WM_NAME", false); // Get WM_NAME atom and store it in _net_wm_title.
+    XChangeProperty(dsp, win, property[2], XInternAtom(dsp, "UTF8_STRING", false), 8, PropModeReplace, (unsigned char *) "yarn", 4);
 
-    char *class = "yarn";
-    XClassHint classhint = { class, "yarn" };
+    // Set window's class.
+    // char *class = "yarn"; -- only used once.
+    XClassHint classhint = { "yarn", "yarn" };
     XSetClassHint(dsp, win, &classhint);
 
-    Atom net_wm_window_type = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE", false);
+    // Parent.
+    property[2] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE", false);   // Let WM know types.
+    // Children.
     property[0] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_NOTIFICATION", false);
     property[1] = XInternAtom(dsp, "_NET_WM_WINDOW_TYPE_UTILITY", false);
 
-    XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 2L);
+    // Reach for 2 longs, (2L).
+    XChangeProperty(dsp, win, property[2], XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 2L);
 
-    Atom net_wm_state = XInternAtom(dsp, "_NET_WM_STATE", false);
+    // Parent.
+    property[2] = XInternAtom(dsp, "_NET_WM_STATE", false);
+    // Child.
     property[0] = XInternAtom(dsp, "_NET_WM_STATE_ABOVE", false);
-    XChangeProperty(dsp, win, net_wm_state, XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
+
+    // Reach for 1 long, (1L).
+    XChangeProperty(dsp, win, property[2], XA_ATOM, 32, PropModeReplace, (unsigned char *) property, 1L);
+
+    // TODO, remove?
     //XChangeProperty(dsp, win, net_wm_window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &hints, 5);
 }
 
@@ -65,9 +75,19 @@ cairo_create_x11_surface0(int x, int y)
 
     if ((dsp = XOpenDisplay(NULL)) == NULL)
         exit(1);
+
+    XVisualInfo vinfo;
     screen = DefaultScreen(dsp);
+    XMatchVisualInfo(dsp, screen, 32, TrueColor, &vinfo);
+
+    XSetWindowAttributes attr;
+    // We need all 3 of these attributes, or BadMatch: http://stackoverflow.com/questions/3645632/how-to-create-a-window-with-a-bit-depth-of-32
+    attr.colormap = XCreateColormap(dsp, DefaultRootWindow(dsp), vinfo.visual, AllocNone);
+    attr.border_pixel = 0;
+    attr.background_pixel = 0;
+
     da = XCreateWindow(dsp, DefaultRootWindow(dsp),
-            100,400,x,y,0,CopyFromParent,CopyFromParent,CopyFromParent,0,0);
+            100,400,x,y,0,vinfo.depth,InputOutput, vinfo.visual,CWColormap | CWBorderPixel | CWBackPixel,&attr);
     x_set_wm(da, dsp);
     XSelectInput(dsp, da, ButtonPressMask | KeyPressMask);
     XMapWindow(dsp, da);
@@ -211,6 +231,7 @@ main (int argc, char *argv[])
     // TODO, give up on rectangles....
 
     surface = cairo_create_x11_surface0(width, height);
+    /*
     context = cairo_create(surface);
     pattern = cairo_pattern_create_rgba(1,0.5,0,0.1);
 
@@ -297,6 +318,7 @@ main (int argc, char *argv[])
         }
 
 
+
         switch (cairo_check_event(surface, 0))
         {
             case 0xff53:    // right cursor
@@ -319,8 +341,11 @@ main (int argc, char *argv[])
         i++;
     }
 
+
     cairo_destroy(context);
     destroy(surface);
 
     return 0;
+*/
+    sleep(10);
 }
