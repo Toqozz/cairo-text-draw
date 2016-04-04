@@ -113,27 +113,41 @@ int
 cairo_check_event(cairo_surface_t *sfc, int block)
 {
     char keybuf[8];
+    XEvent event;
     KeySym key;
-    XEvent e;
 
     for (;;)
     {
+        // If there is nothing in the event cue, XNextEvent will block the program.
+        // If we want to block, then we can.
         if (block || XPending(cairo_xlib_surface_get_display(sfc)))
-            XNextEvent(cairo_xlib_surface_get_display(sfc), &e);
+            XNextEvent(cairo_xlib_surface_get_display(sfc), &event);
         else
             return 0;
 
-        switch (e.type)
+        // Check it out.
+        switch (event.type)
         {
+            // This event shouldn't really happen that much (we should always be exposed).
             case Expose:
                 fprintf(stderr, "hey, we are exposed.\n");
+                return -3053; // 3xp053
+            // -event.xbutton.button -- less likely to be taken?
             case ButtonPress:
-                return -e.xbutton.button;
+                fprintf(stderr, "the button is: %d\n", event.xbutton.button);
+                return -event.xbutton.button;
+            // Don't get key press events as a utility window, useless.
             case KeyPress:
-                XLookupString(&e.xkey, keybuf, sizeof(keybuf), &key, NULL);
-                return key;
+                fprintf(stderr, "the key is: %d\n", event.xkey.keycode);
+                return event.xkey.keycode;
+            // Fuck this event. https://lists.cairographics.org/archives/cairo/2014-August/025534.html
+            case 65:
+                fprintf(stderr, "event 65, ignore\n");
+                break;
+            // We don't know the event, drop.
             default:
-                fprintf(stderr, "Dropping unhandled XEvent.type = %d.\n", e.type);
+                fprintf(stderr, "Dropping unhandled XEvent.type = %d.\n", event.type);
+                break;
         }
     }
 }
@@ -266,7 +280,7 @@ main (int argc, char *argv[])
             cairo_push_group(context);
 
             // Rounded rectangle that slides out >>.
-            rounded_rectangle(enter, 0, width, height, 1, 4, context, 1,0.5,0,1);
+            rounded_rectangle(enter, 0, width, height, 1, 5, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
 
@@ -295,7 +309,7 @@ main (int argc, char *argv[])
             cairo_push_group(context);
 
             // Rounded rectangle that stays.
-            rounded_rectangle(0, 0, width, height, 1, 4, context, 1,0.5,0,1);
+            rounded_rectangle(0, 0, width, height, 1, 5, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
             //cairo_set_operator(context, CAIRO_OPERATOR_OVER);
@@ -335,7 +349,7 @@ main (int argc, char *argv[])
                 break;
 
             case 0xff1b:    // esc
-            case -1:        // left mouse button
+            case 1:        // left mouse button
                 fprintf(stderr, "left mouse button\n");
                 running = 0;
                 break;
