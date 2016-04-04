@@ -249,29 +249,14 @@ main (int argc, char *argv[])
 
 
     //cairo_set_source_rgba(context, 1,1,1,1);
-    cairo_paint(context);
+    //cairo_paint(context);
 
     for (running = 1; running == 1;)
     {
-        switch (cairo_check_event(surface, 0))
-        {
-            case 0xff53:    // right cursor
-                fprintf(stderr, "right cursor pressed");
-                break;
+        cairo_set_operator(context, CAIRO_OPERATOR_CLEAR);
+        cairo_paint(context);
+        cairo_set_operator(context, CAIRO_OPERATOR_OVER);
 
-            case 0xff51:    // left cursor
-                fprintf(stderr, "left cursor pressed"); //wtf is a cursor compared to a mouse button.
-                break;
-
-            case 0xff1b:    // esc
-            case -1:        // left mouse button
-                fprintf(stderr, "left mouse button");
-                running = 0;
-                break;
-        }
-        sleep(1);
-    }
-        /*
         if (enter < 0) {
             // "Animation".
             enter++;
@@ -281,7 +266,7 @@ main (int argc, char *argv[])
             cairo_push_group(context);
 
             // Rounded rectangle that slides out >>.
-            rounded_rectangle(enter, 0, width, height, 1, 10, context, 1,0.5,0,1);
+            rounded_rectangle(enter, 0, width, height, 1, 4, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
 
@@ -301,21 +286,16 @@ main (int argc, char *argv[])
             cairo_pop_group_to_source(context);
 
             // Paint the source.
-            //cairo_paint_with_alpha(context, 1);
-            cairo_mask(context, pattern);
+            cairo_paint(context);
             cairo_surface_flush(surface);
 
         }
         else {
-            //cairo_set_operator(context, CAIRO_OPERATOR_CLEAR);
-            //rounded_rectangle(0, 0, width, height, 1, 10, context, 1,0.5,0,1);
-            //cairo_set_operator(context, CAIRO_OPERATOR_OVER);
-
             // Create a new push group.
             cairo_push_group(context);
 
             // Rounded rectangle that stays.
-            rounded_rectangle(0, 0, width, height, 1, 10, context, 1,0.5,0,1);
+            rounded_rectangle(0, 0, width, height, 1, 4, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
             //cairo_set_operator(context, CAIRO_OPERATOR_OVER);
@@ -337,15 +317,31 @@ main (int argc, char *argv[])
             cairo_pop_group_to_source(context);
 
             // Paint the source.
-            //cairo_paint_with_alpha(context, 1);
-            cairo_mask(context, pattern);
+            cairo_paint(context);
             cairo_surface_flush(surface);
 
             // "Scroll".
             enter++;
         }
-    */
 
+        switch (cairo_check_event(surface, 0))
+        {
+            case 0xff53:    // right cursor
+                fprintf(stderr, "right cursor pressed\n");
+                break;
+
+            case 0xff51:    // left cursor
+                fprintf(stderr, "left cursor pressed\n"); //wtf is a cursor compared to a mouse button.
+                break;
+
+            case 0xff1b:    // esc
+            case -1:        // left mouse button
+                fprintf(stderr, "left mouse button\n");
+                running = 0;
+                break;
+        }
+        nanosleep(&req, &req);
+    }
 
 //TODO WORKING!!!
 //something to do with being in the runnig loop, you have to do it that way!
