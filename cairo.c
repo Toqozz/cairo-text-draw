@@ -12,6 +12,8 @@
 #include <time.h>
 #include <math.h>
 
+const int interval = 16.5; //60fps == 16.5
+
 // Please save me, this time I cannot run.
 void help()
 {
@@ -108,6 +110,17 @@ cairo_create_x11_surface(int x, int y)
     return surface;
 }
 
+void
+x_resize_window(Display *dsp, Window win, int x, int y)
+{
+    XWindowChanges values;
+
+    values.width = x;
+    values.height = y;
+
+    XConfigureWindow(dsp, win, CWWidth | CWHeight, &values);
+}
+
 // Respond properly to events.
 int
 cairo_check_event(cairo_surface_t *sfc, int block)
@@ -130,19 +143,16 @@ cairo_check_event(cairo_surface_t *sfc, int block)
         {
             // This event shouldn't really happen that much (we should always be exposed).
             case Expose:
-                fprintf(stderr, "hey, we are exposed.\n");
                 return -3053; // 3xp053
             // -event.xbutton.button -- less likely to be taken?
             case ButtonPress:
-                fprintf(stderr, "the button is: %d\n", event.xbutton.button);
+                fprintf(stderr, "the button is: %d\n", -event.xbutton.button);
                 return -event.xbutton.button;
             // Don't get key press events as a utility window, useless.
             case KeyPress:
-                fprintf(stderr, "the key is: %d\n", event.xkey.keycode);
                 return event.xkey.keycode;
             // Fuck this event. https://lists.cairographics.org/archives/cairo/2014-August/025534.html
             case 65:
-                fprintf(stderr, "event 65, ignore\n");
                 break;
             // We don't know the event, drop.
             default:
@@ -203,68 +213,68 @@ void rounded_rectangle(double x, double y,
     cairo_fill(context);
 }
 
-const int interval = 16.5; //60fps == 16.5
+struct Variables {
+    char *font;
+    char *string;
+    char *dimensions;
+    char *text;
+    bool  italic;
+    int   margin;
+    int   upper;
+    int   width;
+    int   height;
+};
+
+const struct Variables VAR_DEFAULT = {
+    .dimensions = "300x300", .italic = false, .margin = 5, .upper = 5
+};
+
 
 int
 main (int argc, char *argv[])
 {
-    char *font = NULL;
-    char *string = NULL;
-    char *dimensions;
-    bool  italic = false;
-    int   margin = -1;
-    int   upper = -1;
-    int   width = 300;
-    int   height = 300;
-    int   read;
-    unsigned long len;
+    struct Variables info = VAR_DEFAULT;
 
     int opt;
     while ((opt = getopt(argc, argv, "hf:m:u:d:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
-            case 'f': font = optarg;  break;
-            case 'm': margin = strtol(optarg, NULL, 10); break;
-            case 'u': upper = strtol(optarg, NULL, 10);  break;
-            case 'd': dimensions = optarg; break;
-            case 'i': italic = true; break;
+            case 'f': info.font = optarg;  break;
+            case 'm': info.margin = strtol(optarg, NULL, 10); break;
+            case 'u': info.upper = strtol(optarg, NULL, 10);  break;
+            case 'd': info.dimensions = optarg; break;
+            case 'i': info.italic = true; break;
             default: help();
         }
     }
 
     // Read stdin.
-    read = getline(&string, &len, stdin);
-    if (-1 != read)
-        puts(string);
-    else
+    int read;
+    unsigned long len;
+    read = getline(&info.string, &len, stdin);
+    if (read == -1)
         printf("No input read...\n");
 
     // Option checking.
-    if (!font) printf("Font is required\n");
-    if (margin < 0) margin = 5;
-    if (upper < 0) upper = 5;
-    parse(dimensions, &width, &height);
+    if (!info.font) printf("Font is required\n");
+    if (info.margin < 0) info.margin = 5;
+    if (info.upper < 0) info.upper = 5;
+    parse(info.dimensions, &info.width, &info.height);
 
     cairo_surface_t *surface;
     cairo_t *context;
     cairo_text_extents_t text;
 
-    surface = cairo_create_x11_surface(width, height);
+    surface = cairo_create_x11_surface(info.width, info.height);
     context = cairo_create(surface);
 
     struct timespec req;
     req.tv_sec = 0;
     req.tv_nsec = interval*1000000;
 
+    int enter = -info.width-1;
     int running;
-    int i = 0;
-    int enter = -width-1;
-
-
-    //cairo_set_source_rgba(context, 1,1,1,1);
-    //cairo_paint(context);
-
     for (running = 1; running == 1;)
     {
         cairo_set_operator(context, CAIRO_OPERATOR_CLEAR);
@@ -276,25 +286,30 @@ main (int argc, char *argv[])
             enter++;
             enter = enter/1.05;
 
+            // TODO, is this faster?
+            //x_resize_window(cairo_xlib_surface_get_display(surface), cairo_xlib_surface_get_drawable(surface), enter+info->width, 23);
+            //cairo_xlib_surface_set_size(surface, enter+info->width, 23);
+
             // Create a new push group.
             cairo_push_group(context);
 
             // Rounded rectangle that slides out >>.
-            rounded_rectangle(enter, 0, width, height, 1, 5, context, 1,0.5,0,1);
+            rounded_rectangle(enter, 0, info.width, info.height, 1, 0, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
 
+            // TODO, move outside of loop.
             // Italic? y/n.
-            cairo_select_font_face(context, font,
-                    (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+            cairo_select_font_face(context, info.font,
+                    (info.italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
 
             // Text rectangle.
             cairo_set_font_size(context, 11);
-            cairo_text_extents(context, string, &text);
+            cairo_text_extents(context, info.string, &text);
 
             // Make the source contain the text.
-            cairo_move_to(context, enter, text.height + upper);
-            cairo_show_text(context, string);
+            cairo_move_to(context, enter, text.height + info.upper);
+            cairo_show_text(context, info.string);
 
             // Pop the group to source.
             cairo_pop_group_to_source(context);
@@ -302,30 +317,32 @@ main (int argc, char *argv[])
             // Paint the source.
             cairo_paint(context);
             cairo_surface_flush(surface);
-
         }
         else {
+            // TODO, is this faster?
+            //x_resize_window(cairo_xlib_surface_get_display(surface), cairo_xlib_surface_get_drawable(surface), enter+info->width, 23);
+            //cairo_xlib_surface_set_size(surface, enter+info->width, 23);
+
             // Create a new push group.
             cairo_push_group(context);
 
-            // Rounded rectangle that stays.
-            rounded_rectangle(0, 0, width, height, 1, 5, context, 1,0.5,0,1);
+            // Rounded rectangle that slides out >>.
+            rounded_rectangle(0, 0, info.width, info.height, 1, 0, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
-            //cairo_set_operator(context, CAIRO_OPERATOR_OVER);
 
+            // TODO, move outside of loop.
             // Italic? y/n.
-            cairo_select_font_face(context, font,
-                    (italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+            cairo_select_font_face(context, info.font,
+                    (info.italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
 
             // Text rectangle.
             cairo_set_font_size(context, 11);
-            cairo_text_extents(context, string, &text);
+            cairo_text_extents(context, info.string, &text);
 
             // Make the source contain the text.
-            cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter, text.height + upper);
-            cairo_show_text(context, string);
+            cairo_move_to(context, enter, text.height + info.upper);
+            cairo_show_text(context, info.string);
 
             // Pop the group to source.
             cairo_pop_group_to_source(context);
@@ -334,42 +351,32 @@ main (int argc, char *argv[])
             cairo_paint(context);
             cairo_surface_flush(surface);
 
-            // "Scroll".
+            // "Animation".
             enter++;
         }
 
         switch (cairo_check_event(surface, 0))
         {
+            case -3053:
+                fprintf(stderr, "exposed\n");
+                break;
             case 0xff53:    // right cursor
                 fprintf(stderr, "right cursor pressed\n");
                 break;
-
             case 0xff51:    // left cursor
                 fprintf(stderr, "left cursor pressed\n"); //wtf is a cursor compared to a mouse button.
                 break;
-
             case 0xff1b:    // esc
-            case 1:        // left mouse button
+            case -1:        // left mouse button
                 fprintf(stderr, "left mouse button\n");
-                running = 0;
                 break;
         }
+
         nanosleep(&req, &req);
     }
 
-//TODO WORKING!!!
-//something to do with being in the runnig loop, you have to do it that way!
-
-        //cairo_set_source_rgba(context, 0,0,0,0);
-        // Sleep for 33.3ms (30fps).
-        //nanosleep(&req, &req);
-        //i++;
-    //}
-
-    //sleep(10);
-
-    //cairo_destroy(cr);
-    //destroy(sfc);
+    cairo_destroy(context);
+    destroy(surface);
 
     return 0;
 }
