@@ -1,9 +1,9 @@
 CC=gcc
 
 CFLAGS=-Wall -g `pkg-config --cflags --libs cairo` `pkg-config --cflags --libs cairo-xlib`
-all:	cairo
+all:	draw
 
-cairo:
-	$(CC) $(CFLAGS)	cairo.c x.c	-o cairo
+draw:
+	$(CC) $(CFLAGS)	draw.c x.c	-o draw
 clean:
-	rm -f cairo
+	rm -f draw

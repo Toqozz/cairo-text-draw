@@ -9,6 +9,8 @@
 cairo_surface_t *
 cairo_create_x11_surface(int x, int y);
 
+int
+check_x_event(cairo_surface_t *sfc, int block);
 
 void x_resize_window(Display *dsp, Window win, int x, int y);
 
