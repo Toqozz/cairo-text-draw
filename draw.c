@@ -11,11 +11,24 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <assert.h>
 
 #include "x.h"
 #include "cairo.h"
 
 const int interval = 16.5; //60fps == 16.5
+
+struct Variables {
+    char *font;
+    char *string;
+    bool  italic;
+    int   margin;
+    int   upper;
+    int   x;
+    int   y;
+    int   width;
+    int   height;
+};
 
 // Please save me, this time I cannot run.
 void help()
@@ -56,63 +69,48 @@ void parse(char *wxh, int *width, int *height)
     free(point);                    // finally free the pointer after EVERYTHING is done with it.
 }
 
-// TODO, think about creating the struct on the heap instead of the stack (especially for notification daemon.
-struct Variables {
-    char *font;
-    char *string;
-    char *dimensions;
-    bool  italic;
-    int   margin;
-    int   upper;
-    int   width;
-    int   height;
-};
-
-const struct Variables VAR_DEFAULT = {
-    .font = "Calibre",
-    .string = "NULL",
-    .dimensions = "300x300",
-    .italic = false,
-    .margin = 5,
-    .upper = 5,
-    .width = 300,
-    .height = 20
-};
-
-
-int
-main (int argc, char *argv[])
+// Create a struct on the heap.
+struct Variables *var_create(char *font, char *string)
 {
-    struct Variables info = VAR_DEFAULT;
+    struct Variables *info = malloc(sizeof(struct Variables));
+    assert(info != NULL);
 
-    int opt;
-    while ((opt = getopt(argc, argv, "hf:m:u:d:i")) != -1) {
-        switch(opt)
-        {
-            case 'h': help(); break;
-            case 'f': info.font = optarg;  break;
-            case 'm': info.margin = strtol(optarg, NULL, 10); break;
-            case 'u': info.upper = strtol(optarg, NULL, 10);  break;
-            case 'd': info.dimensions = optarg; break;
-            case 'i': info.italic = true; break;
-            default: help();
-        }
-    }
+    info->font = strdup(font);
+    info->string = strdup(string);
+    info->italic = false;
+    info->margin = 5;
+    info->upper = 5;
+    info->x = 300;
+    info->y = 300;
+    info->width = 300;
+    info->height = 20;
+}
 
-    // Read stdin.
-    int read;
-    unsigned long len = 0;
-    read = getline(&info.string, &len, stdin);
-    if (read == -1)
-        printf("No input read...\n");
-    //else
-        //info.string[strlen(info.string)-1] = '\0';
+void var_destroy(struct Variables *destroy)
+{
+    assert(destroy != NULL);
 
-    // Option checking.
-    if (!info.font) printf("Font is required\n");
-    if (info.margin < 0) info.margin = 5;
-    if (info.upper < 0) info.upper = 5;
-    parse(info.dimensions, &info.width, &info.height);
+    free(destroy->font);
+    free(destroy->string);
+    free(destroy);
+}
+
+// TODO, think about creating the struct on the heap instead of the stack (especially for notification daemon.
+//const struct Variables VAR_DEFAULT = {
+    //.font = "Calibre",
+    //.string = "NULL",
+    //.dimensions = "300x300",
+    //.italic = false,
+    //.margin = 5,
+    //.upper = 5,
+    //.width = 300,
+    //.height = 20
+//};
+
+
+int run(Variables *info)
+{
+
 
     cairo_surface_t *surface;
     cairo_t *context;
@@ -212,7 +210,44 @@ main (int argc, char *argv[])
 
     cairo_destroy(context);
     destroy(surface);
-    free(info.string);
 
-    return 0;
+    //return 0;
+}
+
+int
+main (int argc, char *argv[])
+{
+    struct Variables *info = var_create();
+
+    int opt;
+    char *dimensions;
+    while ((opt = getopt(argc, argv, "hf:m:u:d:i")) != -1) {
+        switch(opt)
+        {
+            case 'h': help(); break;
+            case 'f': info->font = optarg;  break;
+            case 'm': info->margin = strtol(optarg, NULL, 10); break;
+            case 'u': info->upper = strtol(optarg, NULL, 10);  break;
+            case 'd': dimensions = optarg; break;
+            case 'i': info->italic = true; break;
+            default: help();
+        }
+    }
+
+    // Read stdin.
+    int read;
+    unsigned long len = 0;
+    read = getline(&info->string, &len, stdin);
+    if (read == -1)
+        printf("No input read...\n");
+    else
+        info->string[strlen(info.string)-1] = '\0';
+
+    // Option checking.
+    if (!info->font) printf("Font is required\n");
+    if (info->margin < 0) info->margin = 5;
+    if (info->upper < 0) info->upper = 5;
+    parse(dimensions, &info->width, &info->height);
+
+    run(info);
 }
