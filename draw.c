@@ -31,7 +31,8 @@ struct Variables {
 };
 
 // Please save me, this time I cannot run.
-void help()
+void
+help()
 {
     printf("basic window making and text printing.\n"
            "usage: cairo [-h | -s | -f | -m | -l | -w]\n"
@@ -46,7 +47,8 @@ void help()
     exit(0);
 }
 
-void parse(char *wxh, int *width, int *height)
+void
+parse(char *wxh, int *width, int *height)
 {
     char *w;
     char *h;
@@ -70,23 +72,29 @@ void parse(char *wxh, int *width, int *height)
 }
 
 // Create a struct on the heap.
-struct Variables *var_create(char *font, char *string)
+struct Variables 
+*var_create(char *font, char *string,
+                             bool italic, int margin,
+                             int upper, int width, int height)
 {
     struct Variables *info = malloc(sizeof(struct Variables));
     assert(info != NULL);
 
     info->font = strdup(font);
     info->string = strdup(string);
-    info->italic = false;
-    info->margin = 5;
-    info->upper = 5;
+    info->italic = italic;
+    info->margin = margin;
+    info->upper = upper;
     info->x = 300;
     info->y = 300;
-    info->width = 300;
-    info->height = 20;
+    info->width = width;
+    info->height = height;
+
+    return info;
 }
 
-void var_destroy(struct Variables *destroy)
+void
+var_destroy(struct Variables *destroy)
 {
     assert(destroy != NULL);
 
@@ -95,20 +103,8 @@ void var_destroy(struct Variables *destroy)
     free(destroy);
 }
 
-// TODO, think about creating the struct on the heap instead of the stack (especially for notification daemon.
-//const struct Variables VAR_DEFAULT = {
-    //.font = "Calibre",
-    //.string = "NULL",
-    //.dimensions = "300x300",
-    //.italic = false,
-    //.margin = 5,
-    //.upper = 5,
-    //.width = 300,
-    //.height = 20
-//};
-
-
-int run(Variables *info)
+void
+runner(struct Variables *info)
 {
 
 
@@ -116,18 +112,18 @@ int run(Variables *info)
     cairo_t *context;
     cairo_text_extents_t text;
 
-    surface = cairo_create_x11_surface(info.width, info.height);
+    surface = cairo_create_x11_surface(info->width, info->height);
     context = cairo_create(surface);
 
     // Italic? y/n.
-    cairo_select_font_face(context, info.font,
-            (info.italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_select_font_face(context, info->font,
+            (info->italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
 
     struct timespec req;
     req.tv_sec = 0;
     req.tv_nsec = interval*1000000;
 
-    int enter = -info.width-1;
+    int enter = -info->width-1;
     int running;
     for (running = 1; running == 1;)
     {
@@ -147,16 +143,21 @@ int run(Variables *info)
             cairo_push_group(context);
 
             // Rounded rectangle that slides out >>.
-            rounded_rectangle(enter, 0, info.width, info.height, 1, 0, context, 1,0.5,0,1);
+            rounded_rectangle(enter, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
             // Text rectangle.
             cairo_set_font_size(context, 11);
-            cairo_text_extents(context, info.string, &text);
+            cairo_text_extents(context, info->string, &text);
 
             // Make the source contain the text.
             cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter, text.height + info.upper);
-            cairo_show_text(context, info.string);
+            cairo_move_to(context, enter - text.width, text.height + info->upper);
+            cairo_show_text(context, info->string);
+
+            // A margin for the thing, TODO: call this option: margin.
+            cairo_set_source_rgba(context, 1,0.5,0,1);
+            cairo_rectangle(context, 0, 0, 10, info->height);
+            cairo_fill(context);
 
             // Pop the group to source.
             cairo_pop_group_to_source(context);
@@ -169,14 +170,18 @@ int run(Variables *info)
             // Ditto.
             cairo_push_group(context);
 
-            rounded_rectangle(0, 0, info.width, info.height, 1, 0, context, 1,0.5,0,1);
+            rounded_rectangle(0, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
             cairo_set_font_size(context, 11);
-            cairo_text_extents(context, info.string, &text);
+            cairo_text_extents(context, info->string, &text);
 
             cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter, text.height + info.upper);
-            cairo_show_text(context, info.string);
+            cairo_move_to(context, enter - text.width, text.height + info->upper);
+            cairo_show_text(context, info->string);
+
+            cairo_set_source_rgba(context, 1,0.5,0,1);
+            cairo_rectangle(context, 0, 0, 10, info->height);
+            cairo_fill(context);
 
             cairo_pop_group_to_source(context);
 
@@ -204,50 +209,68 @@ int run(Variables *info)
                 running = 0;
                 break;
         }
-
         nanosleep(&req, &req);
     }
-
     cairo_destroy(context);
     destroy(surface);
-
-    //return 0;
+    // Destroy once we are done.
+    var_destroy(info);
 }
 
 int
 main (int argc, char *argv[])
 {
-    struct Variables *info = var_create();
 
-    int opt;
+    // Option initialization.
+    int  margin = 0, upper = 0,
+         width = 0, height = 0;
+    bool italic = false;
+    char *font;
     char *dimensions;
+    char *string = NULL; // getline will allocate memory for us if the pointer is NULL.
+
+    int  opt;
     while ((opt = getopt(argc, argv, "hf:m:u:d:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
-            case 'f': info->font = optarg;  break;
-            case 'm': info->margin = strtol(optarg, NULL, 10); break;
-            case 'u': info->upper = strtol(optarg, NULL, 10);  break;
+            case 'f': font = optarg;  break;
+            case 'm': margin = strtol(optarg, NULL, 10); break;
+            case 'u': upper = strtol(optarg, NULL, 10);  break;
             case 'd': dimensions = optarg; break;
-            case 'i': info->italic = true; break;
+            case 'i': italic = true; break;
             default: help();
         }
     }
 
     // Read stdin.
     int read;
-    unsigned long len = 0;
-    read = getline(&info->string, &len, stdin);
-    if (read == -1)
+    unsigned long len;
+    read = getline(&string, &len, stdin);
+    if (read == -1) {
         printf("No input read...\n");
+        exit(1);
+    }
     else
-        info->string[strlen(info.string)-1] = '\0';
+        string[strlen(string)-1] = '\0';
 
     // Option checking.
-    if (!info->font) printf("Font is required\n");
-    if (info->margin < 0) info->margin = 5;
-    if (info->upper < 0) info->upper = 5;
-    parse(dimensions, &info->width, &info->height);
+    if (!font) printf("Font is required\n");
+    if (!dimensions) dimensions = "500x20";
+    if (margin < 0) margin = 5;
+    if (upper < 0) upper = 5;
+    parse(dimensions, &width, &height);
 
-    run(info);
+    // Create info on the heap.
+    // TODO, parse x, y. (position on window).
+    struct Variables *info = var_create(font, string, italic, margin, upper, width, height);
+    // Done with string -- it's info's job now.
+    free(string);
+
+    // Run until we are done.
+    runner(info);
+
+
+    return(0);
+
 }
