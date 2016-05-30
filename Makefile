@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall -g `pkg-config --cflags --libs cairo` `pkg-config --cflags --libs cairo-xlib`
+CFLAGS=-Wall -g `pkg-config --cflags --libs cairo` `pkg-config --cflags --libs cairo-xlib` `pkg-config --cflags --libs pango` `pkg-config --cflags --libs pangocairo`
 all:	draw
 
 draw:

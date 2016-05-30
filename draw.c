@@ -3,6 +3,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <pango/pangocairo.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,12 +17,13 @@
 #include "x.h"
 #include "cairo.h"
 
-const int interval = 16.5; //60fps == 16.5
+const int interval = 33; //60fps == 16.5
 
 struct Variables {
     char *font;
     char *string;
     bool  italic;
+    int   size;
     int   margin;
     int   upper;
     int   x;
@@ -73,7 +75,7 @@ parse(char *wxh, int *width, int *height)
 
 // Create a struct on the heap.
 struct Variables 
-*var_create(char *font, char *string,
+*var_create(char *font, char *string, int size,
                              bool italic, int margin,
                              int upper, int width, int height)
 {
@@ -83,6 +85,7 @@ struct Variables
     info->font = strdup(font);
     info->string = strdup(string);
     info->italic = italic;
+    info->size = size;
     info->margin = margin;
     info->upper = upper;
     info->x = 300;
@@ -106,18 +109,31 @@ var_destroy(struct Variables *destroy)
 void
 runner(struct Variables *info)
 {
-
-
     cairo_surface_t *surface;
     cairo_t *context;
-    cairo_text_extents_t text;
+    PangoRectangle extents;
+    PangoLayout *layout;
+    PangoFontDescription *desc;
 
+    // Surface for drawing on, layout for putting the font on.
     surface = cairo_create_x11_surface(info->width, info->height);
     context = cairo_create(surface);
+    layout = pango_cairo_create_layout (context);
 
-    // Italic? y/n.
-    cairo_select_font_face(context, info->font,
-            (info->italic) ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+    // Font selection with pango.
+    // TODO reimplement italic.
+    pango_layout_set_text(layout, info->string, -1);
+    desc = pango_font_description_from_string(info->font);
+    pango_layout_set_font_description(layout, desc);
+    pango_font_description_free(desc); // be free my child.
+
+    // Text extents, coolio.
+    // Pango extents: 25x8, Cairo extents: 16:5.  Why?
+    pango_layout_get_extents(layout, &extents, NULL);
+    extents.width = extents.width/PANGO_SCALE;
+    extents.height = extents.height/PANGO_SCALE;
+    //printf("extentw: %d\n", extents.width);
+    //printf("extenth: %d\n", extents.height);
 
     struct timespec req;
     req.tv_sec = 0;
@@ -145,14 +161,10 @@ runner(struct Variables *info)
             // Rounded rectangle that slides out >>.
             rounded_rectangle(enter, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
-            // Text rectangle.
-            cairo_set_font_size(context, 11);
-            cairo_text_extents(context, info->string, &text);
-
             // Make the source contain the text.
             cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter - text.width, text.height + info->upper);
-            cairo_show_text(context, info->string);
+            cairo_move_to(context, enter - extents.width, extents.height + info->upper);
+            pango_cairo_show_layout(context, layout);
 
             // A margin for the thing, TODO: call this option: margin.
             cairo_set_source_rgba(context, 1,0.5,0,1);
@@ -172,12 +184,9 @@ runner(struct Variables *info)
 
             rounded_rectangle(0, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
-            cairo_set_font_size(context, 11);
-            cairo_text_extents(context, info->string, &text);
-
             cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter - text.width, text.height + info->upper);
-            cairo_show_text(context, info->string);
+            cairo_move_to(context, enter - extents.width, extents.height + info->upper);
+            pango_cairo_show_layout(context, layout);
 
             cairo_set_source_rgba(context, 1,0.5,0,1);
             cairo_rectangle(context, 0, 0, 10, info->height);
@@ -222,7 +231,7 @@ main (int argc, char *argv[])
 {
 
     // Option initialization.
-    int  margin = 0, upper = 0,
+    int  size = 0, margin = 0, upper = 0,
          width = 0, height = 0;
     bool italic = false;
     char *font;
@@ -230,11 +239,12 @@ main (int argc, char *argv[])
     char *string = NULL; // getline will allocate memory for us if the pointer is NULL.
 
     int  opt;
-    while ((opt = getopt(argc, argv, "hf:m:u:d:i")) != -1) {
+    while ((opt = getopt(argc, argv, "hf:s:m:u:d:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
             case 'f': font = optarg;  break;
+            case 's': size = strtol(optarg, NULL, 10); break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
             case 'd': dimensions = optarg; break;
@@ -263,7 +273,7 @@ main (int argc, char *argv[])
 
     // Create info on the heap.
     // TODO, parse x, y. (position on window).
-    struct Variables *info = var_create(font, string, italic, margin, upper, width, height);
+    struct Variables *info = var_create(font, string, size, italic, margin, upper, width, height);
     // Done with string -- it's info's job now.
     free(string);
 
