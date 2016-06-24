@@ -118,19 +118,17 @@ runner(struct Variables *info)
     layout = pango_cairo_create_layout (context);
 
     // Font selection with pango.
-    // Supports markup.
+    // Supports pango markup.
     pango_layout_set_markup(layout, info->string, -1);
     desc = pango_font_description_from_string(info->font);
     pango_layout_set_font_description(layout, desc);
     pango_font_description_free(desc); // be free my child.
 
     // Text extents, coolio.
-    // Pango extents: 25x8, Cairo extents: 16:5.  Why?
+    // Pixel extents are much better for this purpose.
     pango_layout_get_pixel_extents(layout, &extents, NULL);
-    //extents.width = extents.width/PANGO_SCALE;
-    //extents.height = extents.height/PANGO_SCALE;
-    printf("extentw: %d\n", extents.width);
-    printf("extenth: %d\n", extents.height);
+    //printf("extentw: %d\n", extents.width);
+    //printf("extenth: %d\n", extents.height);
 
     struct timespec req;
     req.tv_sec = 0;
@@ -143,6 +141,13 @@ runner(struct Variables *info)
         cairo_set_operator(context, CAIRO_OPERATOR_CLEAR);
         cairo_paint(context);
         cairo_set_operator(context, CAIRO_OPERATOR_OVER);
+
+        // TODO adapt to multiple messages.
+        // how can i move them all at once?
+        // -threaded
+        // -single(will look weird)
+        //      maybe it wont! push group is life saving.
+        //      !
 
         if (enter < 0) {
             // "Animation".
@@ -183,7 +188,6 @@ runner(struct Variables *info)
 
             cairo_set_source_rgba(context, 0,0,0,1);
             cairo_move_to(context, enter - extents.width, info->upper);
-//+ info->upper);
             pango_cairo_show_layout(context, layout);
 
             cairo_set_source_rgba(context, 1,0.5,0,1);
@@ -198,6 +202,25 @@ runner(struct Variables *info)
             // "Animation".
             enter++;
         }
+
+        // if new_event() {
+        //      make new rectangle above previous one.
+        //          how?
+        //          use for loop in rounded_rectangle clause?
+        //          .. messages are in an array
+        //              how to keep positions intact?
+        //                  have to record them this way.
+        //
+        //          would you use structs for tihs? yes, on the stack i think
+        //          what about rectangle? it comes out before the text -- they are separate.
+        //          well, the current method is used to that.
+        //          for i in messages:
+        //              moveto (messagepos)
+        //              print (message)
+        //              set_new_position.
+        //      record position of rectangle.
+        //
+        // }
 
         switch (check_x_event(surface, 0))
         {
@@ -270,13 +293,13 @@ main (int argc, char *argv[])
 
     // Create info on the heap.
     // TODO, parse x, y. (position on window).
+    // Do you mean let the user set  where theyre going? already done.. kind of.
     struct Variables *info = var_create(font, string, italic, margin, upper, width, height);
     // Done with string -- it's info's job now.
     free(string);
 
     // Run until we are done.
     runner(info);
-
 
     return(0);
 
