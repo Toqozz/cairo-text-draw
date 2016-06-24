@@ -23,7 +23,6 @@ struct Variables {
     char *font;
     char *string;
     bool  italic;
-    int   size;
     int   margin;
     int   upper;
     int   x;
@@ -75,8 +74,7 @@ parse(char *wxh, int *width, int *height)
 
 // Create a struct on the heap.
 struct Variables 
-*var_create(char *font, char *string, int size,
-                             bool italic, int margin,
+*var_create(char *font, char *string, bool italic, int margin,
                              int upper, int width, int height)
 {
     struct Variables *info = malloc(sizeof(struct Variables));
@@ -85,7 +83,6 @@ struct Variables
     info->font = strdup(font);
     info->string = strdup(string);
     info->italic = italic;
-    info->size = size;
     info->margin = margin;
     info->upper = upper;
     info->x = 300;
@@ -121,19 +118,19 @@ runner(struct Variables *info)
     layout = pango_cairo_create_layout (context);
 
     // Font selection with pango.
-    // TODO reimplement italic.
-    pango_layout_set_text(layout, info->string, -1);
+    // Supports markup.
+    pango_layout_set_markup(layout, info->string, -1);
     desc = pango_font_description_from_string(info->font);
     pango_layout_set_font_description(layout, desc);
     pango_font_description_free(desc); // be free my child.
 
     // Text extents, coolio.
     // Pango extents: 25x8, Cairo extents: 16:5.  Why?
-    pango_layout_get_extents(layout, &extents, NULL);
-    extents.width = extents.width/PANGO_SCALE;
-    extents.height = extents.height/PANGO_SCALE;
-    //printf("extentw: %d\n", extents.width);
-    //printf("extenth: %d\n", extents.height);
+    pango_layout_get_pixel_extents(layout, &extents, NULL);
+    //extents.width = extents.width/PANGO_SCALE;
+    //extents.height = extents.height/PANGO_SCALE;
+    printf("extentw: %d\n", extents.width);
+    printf("extenth: %d\n", extents.height);
 
     struct timespec req;
     req.tv_sec = 0;
@@ -163,7 +160,7 @@ runner(struct Variables *info)
 
             // Make the source contain the text.
             cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter - extents.width, extents.height + info->upper);
+            cairo_move_to(context, enter - extents.width, extents.height/2 + info->upper);
             pango_cairo_show_layout(context, layout);
 
             // A margin for the thing, TODO: call this option: margin.
@@ -185,7 +182,8 @@ runner(struct Variables *info)
             rounded_rectangle(0, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
             cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter - extents.width, extents.height + info->upper);
+            cairo_move_to(context, enter - extents.width, info->upper);
+//+ info->upper);
             pango_cairo_show_layout(context, layout);
 
             cairo_set_source_rgba(context, 1,0.5,0,1);
@@ -231,7 +229,7 @@ main (int argc, char *argv[])
 {
 
     // Option initialization.
-    int  size = 0, margin = 0, upper = 0,
+    int  margin = 0, upper = 0,
          width = 0, height = 0;
     bool italic = false;
     char *font;
@@ -244,7 +242,6 @@ main (int argc, char *argv[])
         {
             case 'h': help(); break;
             case 'f': font = optarg;  break;
-            case 's': size = strtol(optarg, NULL, 10); break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
             case 'd': dimensions = optarg; break;
@@ -273,7 +270,7 @@ main (int argc, char *argv[])
 
     // Create info on the heap.
     // TODO, parse x, y. (position on window).
-    struct Variables *info = var_create(font, string, size, italic, margin, upper, width, height);
+    struct Variables *info = var_create(font, string, italic, margin, upper, width, height);
     // Done with string -- it's info's job now.
     free(string);
 
