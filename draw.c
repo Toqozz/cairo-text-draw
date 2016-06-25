@@ -14,6 +14,8 @@
 #include <math.h>
 #include <assert.h>
 
+//#include <pthread.h>
+
 #include "x.h"
 #include "cairo.h"
 
@@ -21,7 +23,7 @@ const int interval = 33; //60fps == 16.5
 
 struct Variables {
     char *font;
-    char *string;
+    //char *string;
     bool  italic;
     int   margin;
     int   upper;
@@ -29,6 +31,12 @@ struct Variables {
     int   y;
     int   width;
     int   height;
+};
+
+struct MessageInfo {
+    char *string;
+    int   x;
+    int   y;
 };
 
 // Please save me, this time I cannot run.
@@ -74,14 +82,14 @@ parse(char *wxh, int *width, int *height)
 
 // Create a struct on the heap.
 struct Variables 
-*var_create(char *font, char *string, bool italic, int margin,
-                             int upper, int width, int height)
+*var_create(char *font, bool italic, int margin,
+            int upper, int width, int height)
 {
     struct Variables *info = malloc(sizeof(struct Variables));
     assert(info != NULL);
 
-    info->font = strdup(font);
-    info->string = strdup(string);
+    info->font = font;
+    //info->string = strdup(string);
     info->italic = italic;
     info->margin = margin;
     info->upper = upper;
@@ -93,18 +101,31 @@ struct Variables
     return info;
 }
 
+// Create messages on the stack.
+struct MessageInfo
+message_create(char *string, int x, int y)
+{
+    struct MessageInfo message;
+
+    message.string = string;
+    message.x = x;
+    message.y = y;
+
+    return message;
+}
+
+// Can be reused for both structs.
 void
 var_destroy(struct Variables *destroy)
 {
     assert(destroy != NULL);
 
-    free(destroy->font);
-    free(destroy->string);
+    //free(destroy->string);
     free(destroy);
 }
 
 void
-runner(struct Variables *info)
+runner(struct Variables *info, char *strings[])
 {
     cairo_surface_t *surface;
     cairo_t *context;
@@ -112,115 +133,95 @@ runner(struct Variables *info)
     PangoLayout *layout;
     PangoFontDescription *desc;
 
+    // TODO, implement this.
+    //cairo_xlib_surface_set_size(surface, enter+info->width, 23);
+    // TODO: REPLACE with detection:
+    // if new message, message create on the end of the array.
+
     // Surface for drawing on, layout for putting the font on.
-    surface = cairo_create_x11_surface(info->width, info->height);
+    surface = cairo_create_x11_surface(info->width, info->height*4+40);
     context = cairo_create(surface);
     layout = pango_cairo_create_layout (context);
 
     // Font selection with pango.
-    // Supports pango markup.
-    pango_layout_set_markup(layout, info->string, -1);
     desc = pango_font_description_from_string(info->font);
     pango_layout_set_font_description(layout, desc);
     pango_font_description_free(desc); // be free my child.
 
-    // Text extents, coolio.
-    // Pixel extents are much better for this purpose.
-    pango_layout_get_pixel_extents(layout, &extents, NULL);
-    //printf("extentw: %d\n", extents.width);
-    //printf("extenth: %d\n", extents.height);
-
+    // Interval = 33 = 30fps.
     struct timespec req;
     req.tv_sec = 0;
     req.tv_nsec = interval*1000000;
 
-    int enter = -info->width-1;
+    struct MessageInfo messages[10];
+    int i;
+    for (i = 0; i < 4; i++)
+        messages[i] = message_create (strings[i], -info->width-1, i*30);
+        //printf("messages%d: string:%s, x:%d, y:%d\n", i, strings[i], messages[i].x, messages[i].y);
+
     int running;
     for (running = 1; running == 1;)
     {
+        // Clear the surface.
         cairo_set_operator(context, CAIRO_OPERATOR_CLEAR);
         cairo_paint(context);
         cairo_set_operator(context, CAIRO_OPERATOR_OVER);
 
-        // TODO adapt to multiple messages.
-        // how can i move them all at once?
-        // -threaded
-        // -single(will look weird)
-        //      maybe it wont! push group is life saving.
-        //      !
+        cairo_push_group(context);
 
-        if (enter < 0) {
-            // "Animation".
-            enter++;
-            enter = enter/1.05;
+        for (i = 0; i < 3; i++)
+        {
+            if (messages[i].x < 0) {
 
-            // TODO, is this faster?
-            //cairo_xlib_surface_set_size(surface, enter+info->width, 23);
+                messages[i].x++;
+                messages[i].x = messages[i].x/1.05;
 
-            // Create a new push group.
-            cairo_push_group(context);
+                // Rectangle for each message.
+                rounded_rectangle(messages[i].x, messages[i].y, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
-            // Rounded rectangle that slides out >>.
-            rounded_rectangle(enter, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
+                // Allow markup on the string.
+                pango_layout_set_markup(layout, messages[i].string, -1);
 
-            // Make the source contain the text.
-            cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter - extents.width, extents.height/2 + info->upper);
-            pango_cairo_show_layout(context, layout);
+                // Pixel extents are much better for this purpose.
+                pango_layout_get_pixel_extents(layout, &extents, NULL);
 
-            // A margin for the thing, TODO: call this option: margin.
-            cairo_set_source_rgba(context, 1,0.5,0,1);
-            cairo_rectangle(context, 0, 0, 10, info->height);
-            cairo_fill(context);
+                // Make the source contain the text.
+                cairo_set_source_rgba(context, 0,0,0,1);
+                cairo_move_to(context, messages[i].x, messages[i].y + info->upper);
+                pango_cairo_show_layout(context, layout);
 
-            // Pop the group to source.
-            cairo_pop_group_to_source(context);
+                // A margin for the thing, TODO: call this option: margin.
+                cairo_set_source_rgba(context, 1,0.5,0,1);
+                cairo_rectangle(context, 0, messages[i].y, 10, info->height);
+                cairo_fill(context);
+            }
+            else {
+                rounded_rectangle(0, messages[i].y, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
-            // Paint the source.
-            cairo_paint(context);
-            cairo_surface_flush(surface);
-        }
-        else {
-            // Ditto.
-            cairo_push_group(context);
+                pango_layout_set_markup(layout, messages[i].string, -1);
+                pango_layout_get_pixel_extents(layout, &extents, NULL);
 
-            rounded_rectangle(0, 0, info->width, info->height, 1, 0, context, 1,0.5,0,1);
+                cairo_set_source_rgba(context, 0,0,0,1);
+                cairo_move_to(context, messages[i].x - extents.width, messages[i].y + info->upper);
+                pango_cairo_show_layout(context, layout);
 
-            cairo_set_source_rgba(context, 0,0,0,1);
-            cairo_move_to(context, enter - extents.width, info->upper);
-            pango_cairo_show_layout(context, layout);
+                cairo_set_source_rgba(context, 1,0.5,0,1);
+                cairo_rectangle(context, 0, messages[i].y, 10, info->height);
+                cairo_fill(context);
 
-            cairo_set_source_rgba(context, 1,0.5,0,1);
-            cairo_rectangle(context, 0, 0, 10, info->height);
-            cairo_fill(context);
-
-            cairo_pop_group_to_source(context);
-
-            cairo_paint(context);
-            cairo_surface_flush(surface);
-
-            // "Animation".
-            enter++;
+                // "Animation".
+                messages[i].x++;
+            }
         }
 
-        // if new_event() {
-        //      make new rectangle above previous one.
-        //          how?
-        //          use for loop in rounded_rectangle clause?
-        //          .. messages are in an array
-        //              how to keep positions intact?
-        //                  have to record them this way.
-        //
-        //          would you use structs for tihs? yes, on the stack i think
-        //          what about rectangle? it comes out before the text -- they are separate.
-        //          well, the current method is used to that.
-        //          for i in messages:
-        //              moveto (messagepos)
-        //              print (message)
-        //              set_new_position.
-        //      record position of rectangle.
-        //
-        // }
+
+        // Pop the group to source.
+        cairo_pop_group_to_source(context);
+
+        // Paint the source.
+        cairo_paint(context);
+        cairo_surface_flush(surface);
+
 
         switch (check_x_event(surface, 0))
         {
@@ -250,22 +251,23 @@ runner(struct Variables *info)
 int
 main (int argc, char *argv[])
 {
-
     // Option initialization.
-    int  margin = 0, upper = 0,
-         width = 0, height = 0;
+    int  margin = 0, number = 0,
+         upper = 0, width = 0,
+         height = 0;
     bool italic = false;
     char *font;
     char *dimensions;
-    char *string = NULL; // getline will allocate memory for us if the pointer is NULL.
+
 
     int  opt;
-    while ((opt = getopt(argc, argv, "hf:s:m:u:d:i")) != -1) {
+    while ((opt = getopt(argc, argv, "hf:s:m:n:u:d:i")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
             case 'f': font = optarg;  break;
             case 'm': margin = strtol(optarg, NULL, 10); break;
+            case 'n': number = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
             case 'd': dimensions = optarg; break;
             case 'i': italic = true; break;
@@ -273,33 +275,36 @@ main (int argc, char *argv[])
         }
     }
 
-    // Read stdin.
-    int read;
+    // Initialise to NULL and read stdin.  If the char is NULL, getline will do memory allocation for us.
+    char *strings[number]; // getline will allocate memory for us if the pointer is NULL.
+    int i;
+    int status;
     unsigned long len;
-    read = getline(&string, &len, stdin);
-    if (read == -1) {
-        printf("No input read...\n");
-        exit(1);
+    for (i = 0; i < number; i++) {
+        strings[i] = NULL;
+        status = getline(&strings[i], &len, stdin);
+
+        //printf("No input read...\n");
+        if (status == -1) exit(1);
+        else strings[i][strlen(strings[i])-1] = '\0';
     }
-    else
-        string[strlen(string)-1] = '\0';
 
     // Option checking.
     if (!font) printf("Font is required\n");
-    if (!dimensions) dimensions = "500x20";
+    if (!dimensions) dimensions = "300x300";
     if (margin < 0) margin = 5;
     if (upper < 0) upper = 5;
     parse(dimensions, &width, &height);
 
     // Create info on the heap.
-    // TODO, parse x, y. (position on window).
-    // Do you mean let the user set  where theyre going? already done.. kind of.
-    struct Variables *info = var_create(font, string, italic, margin, upper, width, height);
-    // Done with string -- it's info's job now.
-    free(string);
+    struct Variables *info = var_create(font, italic, margin, upper, width, height);
 
-    // Run until we are done.
-    runner(info);
+    // Run until done.
+    runner(info, strings);
+
+    // Done with strings -- program ending.
+    for (i = 0; i < number; i++)
+        free(strings[i]);
 
     return(0);
 
