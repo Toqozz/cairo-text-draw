@@ -23,18 +23,21 @@ const int interval = 33; //60fps == 16.5
 
 struct Variables {
     char *font;
-    //char *string;
-    bool  italic;
+    bool  reverse;
     int   margin;
     int   upper;
-    int   x;
-    int   y;
+    int   number;
+    int   xpos;
+    int   ypos;
     int   width;
     int   height;
+    int   gap;
 };
 
 struct MessageInfo {
     char *string;
+    int   textx;
+    int   texty;
     int   x;
     int   y;
 };
@@ -44,57 +47,70 @@ void
 help()
 {
     printf("basic window making and text printing.\n"
-           "usage: cairo [-h | -s | -f | -m | -l | -w]\n"
+           "usage: cairo [ -h | -f | -m | -u | -d | -n | -g ]\n"
            "        -h Show this help\n"
-           "        -s String to print\n"
            "        -f Font to use\n"
            "        -m Distance from the left side of the window\n"
            "        -u Distance text is placed from the top of the window\n"
-           "        -l Length of the window\n"
-           "        -w Width of the window\n"
+           "        -d Dimensions (WxH+X+Y)\n"
+           "        -n Number of messages\n"
+           "        -g Gap between messages\n"
            );
     exit(0);
 }
 
 void
-parse(char *wxh, int *width, int *height)
+parse(char *wxh, int *xpos, int *ypos, int *width, int *height)
 {
+    char *x;
+    char *y;
     char *w;
     char *h;
+
     // We need something that is mutable.
     // Remember pointer position (it's being mutated).
     char *dupe = strdup(wxh);
     char *point = dupe;
 
     // If memeory not got.
-    if (dupe == 0)
-        exit(1);
+    assert(dupe != 0);
 
-    // ex. "500x10"
-    w = strsep(&dupe, "x");         // w = "500", dupe = "10"
-    h = strsep(&dupe, "x");         // h = "10", dupe = ""
+    // ex. "500x10+20+30"
+    w = strsep(&dupe, "x");         // w = "500", dupe = "10+20+30"
+    h = strsep(&dupe, "+");         // h = "10", dupe = "20+30"
+    x = strsep(&dupe, "+");         // x = "20", dupe = "30"
+    y = strsep(&dupe, "+");         // y = "30", dupe = ""
+    //printf("%sx%s+%s+%s\n", w,h,x,y);
 
     // Change variables 'globally' in memory. (*width and *height have memory addresses from main.).
-    *width = strtol(w, NULL, 10);   // change value width is pointing to to something else.
-    *height = strtol(h, NULL, 10);  // ""
-    free(point);                    // finally free the pointer after EVERYTHING is done with it.
+    *xpos = strtol(x, NULL, 10);   // change value xpos is pointing to to something else.
+    *ypos = strtol(y, NULL, 10);
+    *width = strtol(w, NULL, 10);
+    *height = strtol(h, NULL, 10);
+
+    // Free pointer after everytihng is done with it.
+    free(point);
+    free(dupe);
 }
 
 // Create a struct on the heap.
 struct Variables 
-*var_create(char *font, bool italic, int margin,
-            int upper, int width, int height)
+*var_create(char *font, bool reverse,
+            int margin, int number, int upper,
+            int gap, int xpos, int ypos,
+            int width, int height)
 {
     struct Variables *info = malloc(sizeof(struct Variables));
     assert(info != NULL);
 
     info->font = font;
-    //info->string = strdup(string);
-    info->italic = italic;
+    info->reverse = reverse;
     info->margin = margin;
+    info->number = number;
     info->upper = upper;
-    info->x = 300;
-    info->y = 300;
+    info->gap = gap;
+    info->xpos = xpos;
+    info->ypos = ypos;
     info->width = width;
     info->height = height;
 
@@ -103,11 +119,13 @@ struct Variables
 
 // Create messages on the stack.
 struct MessageInfo
-message_create(char *string, int x, int y)
+message_create(char *string, int textx, int texty, int x, int y)
 {
     struct MessageInfo message;
 
     message.string = string;
+    message.textx = textx;
+    message.texty =texty;
     message.x = x;
     message.y = y;
 
@@ -133,15 +151,16 @@ runner(struct Variables *info, char *strings[])
     PangoLayout *layout;
     PangoFontDescription *desc;
 
-    // TODO, implement this.
-    //cairo_xlib_surface_set_size(surface, enter+info->width, 23);
     // TODO: REPLACE with detection:
     // if new message, message create on the end of the array.
 
     // Surface for drawing on, layout for putting the font on.
-    surface = cairo_create_x11_surface(info->width, info->height*4+40);
+    surface = cairo_create_x11_surface(info->xpos, info->ypos, info->width, (info->height + info->gap) * info->number);
     context = cairo_create(surface);
     layout = pango_cairo_create_layout (context);
+
+    // Changes the size of the canvas.  Does NOT resize the window.
+    //cairo_xlib_surface_set_size(surface, info->width, (info->height + info->gap) *  info->number);
 
     // Font selection with pango.
     desc = pango_font_description_from_string(info->font);
@@ -153,10 +172,10 @@ runner(struct Variables *info, char *strings[])
     req.tv_sec = 0;
     req.tv_nsec = interval*1000000;
 
-    struct MessageInfo messages[10];
+    struct MessageInfo messages[info->number];
     int i;
-    for (i = 0; i < 4; i++)
-        messages[i] = message_create (strings[i], -info->width-1, i*30);
+    for (i = 0; i < info->number; i++)
+        messages[i] = message_create (strings[i], 0, 0, -info->width-1, i*(info->height + info->gap));
         //printf("messages%d: string:%s, x:%d, y:%d\n", i, strings[i], messages[i].x, messages[i].y);
 
     int running;
@@ -167,62 +186,50 @@ runner(struct Variables *info, char *strings[])
         cairo_paint(context);
         cairo_set_operator(context, CAIRO_OPERATOR_OVER);
 
+        // New group (everything is pre-rendered and then shown at the same time).
         cairo_push_group(context);
 
-        for (i = 0; i < 3; i++)
+        for (i = 0; i < info->number; i++)
         {
-            if (messages[i].x < 0) {
+            // If the bar has reached the end, stop it.  Otherwise keep going.
+            // if (messages + 1 < 0) : (message.x/=1.05) else : (message.x = 0).
+            ++messages[i].x < 0 ? ((messages[i].x = messages[i].x/1.05)) : ((messages[i].x = 0));
+            messages[i].textx++;
 
-                messages[i].x++;
-                messages[i].x = messages[i].x/1.05;
+            // Draw each "panel".
+            rounded_rectangle(messages[i].x, messages[i].y, info->width, info->height, 1, 0, context, 1,0.5,0,1);
 
-                // Rectangle for each message.
-                rounded_rectangle(messages[i].x, messages[i].y, info->width, info->height, 1, 0, context, 1,0.5,0,1);
+            // Allow markup on the string.
+            // Pixel extents are much better for this purpose.
+            pango_layout_set_markup(layout, messages[i].string, -1);
+            pango_layout_get_pixel_extents(layout, &extents, NULL);
 
-                // Allow markup on the string.
-                pango_layout_set_markup(layout, messages[i].string, -1);
+            // Push the text to the soure.
+            cairo_set_source_rgba(context, 0,0,0,1);
+            cairo_move_to(context, messages[i].textx - extents.width, messages[i].y + info->upper);
+            pango_cairo_show_layout(context, layout);
 
-                // Pixel extents are much better for this purpose.
-                pango_layout_get_pixel_extents(layout, &extents, NULL);
+            // Draw over the text with a margin.
+            cairo_set_source_rgba(context, 1,0.5,0,1);
+            cairo_rectangle(context, 0, messages[i].y, info->margin, info->height);
+            cairo_fill(context);
 
-                // Make the source contain the text.
-                cairo_set_source_rgba(context, 0,0,0,1);
-                cairo_move_to(context, messages[i].x, messages[i].y + info->upper);
-                pango_cairo_show_layout(context, layout);
-
-                // A margin for the thing, TODO: call this option: margin.
-                cairo_set_source_rgba(context, 1,0.5,0,1);
-                cairo_rectangle(context, 0, messages[i].y, 10, info->height);
-                cairo_fill(context);
-            }
-            else {
-                rounded_rectangle(0, messages[i].y, info->width, info->height, 1, 0, context, 1,0.5,0,1);
-
-                pango_layout_set_markup(layout, messages[i].string, -1);
-                pango_layout_get_pixel_extents(layout, &extents, NULL);
-
-                cairo_set_source_rgba(context, 0,0,0,1);
-                cairo_move_to(context, messages[i].x - extents.width, messages[i].y + info->upper);
-                pango_cairo_show_layout(context, layout);
-
-                cairo_set_source_rgba(context, 1,0.5,0,1);
-                cairo_rectangle(context, 0, messages[i].y, 10, info->height);
-                cairo_fill(context);
-
-                // "Animation".
-                messages[i].x++;
-            }
+            // Kind of cool.
+            //cairo_translate(context, info->width/2.0, info->height/2.0);
+            //cairo_rotate(context, 1);
+            //
+            //cairo_scale(context, -1, 1);
         }
 
 
-        // Pop the group to source.
+        // Pop the group.
         cairo_pop_group_to_source(context);
 
-        // Paint the source.
+        // Paint it.
         cairo_paint(context);
         cairo_surface_flush(surface);
 
-
+        // Clue in for x events (allows to check for hotkeys, stuff like that).
         switch (check_x_event(surface, 0))
         {
             case -3053:
@@ -240,11 +247,14 @@ runner(struct Variables *info, char *strings[])
                 running = 0;
                 break;
         }
+
+        // Finally sleep ("animation").
         nanosleep(&req, &req);
     }
+
+    // Destroy once done.
     cairo_destroy(context);
     destroy(surface);
-    // Destroy once we are done.
     var_destroy(info);
 }
 
@@ -254,14 +264,15 @@ main (int argc, char *argv[])
     // Option initialization.
     int  margin = 0, number = 0,
          upper = 0, width = 0,
-         height = 0;
-    bool italic = false;
+         xpos = 0, ypos = 0,
+         height = 0, gap = 0;
+    bool reverse = false;
     char *font;
     char *dimensions;
 
 
     int  opt;
-    while ((opt = getopt(argc, argv, "hf:s:m:n:u:d:i")) != -1) {
+    while ((opt = getopt(argc, argv, "hf:s:m:n:u:g:d:r")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
@@ -269,14 +280,16 @@ main (int argc, char *argv[])
             case 'm': margin = strtol(optarg, NULL, 10); break;
             case 'n': number = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
+            case 'g': gap = strtol(optarg, NULL, 10); break;
             case 'd': dimensions = optarg; break;
-            case 'i': italic = true; break;
+            case 'r': reverse = true; break;
             default: help();
         }
     }
 
-    // Initialise to NULL and read stdin.  If the char is NULL, getline will do memory allocation for us.
-    char *strings[number]; // getline will allocate memory for us if the pointer is NULL.
+
+    // Initialise to NULL and read stdin.  If the char is NULL, getline will do memory allocation automatically.
+    char *strings[number];
     int i;
     int status;
     unsigned long len;
@@ -284,9 +297,9 @@ main (int argc, char *argv[])
         strings[i] = NULL;
         status = getline(&strings[i], &len, stdin);
 
-        //printf("No input read...\n");
-        if (status == -1) exit(1);
-        else strings[i][strlen(strings[i])-1] = '\0';
+        assert(status != -1);
+
+        strings[i][strlen(strings[i])-1] = '\0';
     }
 
     // Option checking.
@@ -294,10 +307,10 @@ main (int argc, char *argv[])
     if (!dimensions) dimensions = "300x300";
     if (margin < 0) margin = 5;
     if (upper < 0) upper = 5;
-    parse(dimensions, &width, &height);
+    parse(dimensions, &xpos, &ypos, &width, &height);
 
     // Create info on the heap.
-    struct Variables *info = var_create(font, italic, margin, upper, width, height);
+    struct Variables *info = var_create(font, reverse, margin, number, upper, gap, xpos, ypos, width, height);
 
     // Run until done.
     runner(info, strings);

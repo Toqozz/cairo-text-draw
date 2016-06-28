@@ -46,7 +46,7 @@ x_set_wm(Window win, Display *dsp)
 
 // Map window and return surface for that window.
 cairo_surface_t *
-cairo_create_x11_surface(int x, int y)
+cairo_create_x11_surface(int x, int y, int w, int h)
 {
     Display *display;
     Drawable drawable;
@@ -69,8 +69,8 @@ cairo_create_x11_surface(int x, int y)
     attr.background_pixel = 0;
 
     drawable = XCreateWindow(display, DefaultRootWindow(display),  // Returns a window (a drawable place).
-            100,400, // Position on screen.
-            x,y,     // Width, Height.
+            x,y,     // Position on screen.
+            w,h,     // Width, Height.
             0,       // Border width.
             vinfo.depth, InputOutput, vinfo.visual,   // Depth, Class, Visual type.
             CWColormap | CWBorderPixel | CWBackPixel, // Overwritten attributes.
@@ -84,8 +84,8 @@ cairo_create_x11_surface(int x, int y)
 
     // Finally create a surface from the window.
     surface = cairo_xlib_surface_create(display, drawable,
-            vinfo.visual, x, y);
-    cairo_xlib_surface_set_size(surface, x, y);
+            vinfo.visual, w, h);
+    //cairo_xlib_surface_set_size(surface, w, h);
 
     return surface;
 }
