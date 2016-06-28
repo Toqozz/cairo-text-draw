@@ -23,15 +23,15 @@ const int interval = 33; //60fps == 16.5
 
 struct Variables {
     char *font;
-    bool  reverse;
     int   margin;
-    int   upper;
     int   number;
+    int   upper;
+    int   gap;
+    int   rounding;
     int   xpos;
     int   ypos;
     int   width;
     int   height;
-    int   gap;
 };
 
 struct MessageInfo {
@@ -94,21 +94,21 @@ parse(char *wxh, int *xpos, int *ypos, int *width, int *height)
 }
 
 // Create a struct on the heap.
-struct Variables 
-*var_create(char *font, bool reverse,
+struct Variables
+*var_create(char *font,
             int margin, int number, int upper,
-            int gap, int xpos, int ypos,
+            int gap, int rounding, int xpos, int ypos,
             int width, int height)
 {
     struct Variables *info = malloc(sizeof(struct Variables));
     assert(info != NULL);
 
     info->font = font;
-    info->reverse = reverse;
     info->margin = margin;
     info->number = number;
     info->upper = upper;
     info->gap = gap;
+    info->rounding = rounding;
     info->xpos = xpos;
     info->ypos = ypos;
     info->width = width;
@@ -197,7 +197,7 @@ runner(struct Variables *info, char *strings[])
             messages[i].textx++;
 
             // Draw each "panel".
-            rounded_rectangle(messages[i].x, messages[i].y, info->width, info->height, 1, 0, context, 1,0.5,0,1);
+            rounded_rectangle(messages[i].x, messages[i].y, info->width, info->height, 1, info->rounding, context, 1,0.5,0,1);
 
             // Allow markup on the string.
             // Pixel extents are much better for this purpose.
@@ -265,14 +265,14 @@ main (int argc, char *argv[])
     int  margin = 0, number = 0,
          upper = 0, width = 0,
          xpos = 0, ypos = 0,
-         height = 0, gap = 0;
-    bool reverse = false;
+         height = 0, gap = 0,
+         rounding = 0;
     char *font;
     char *dimensions;
 
 
     int  opt;
-    while ((opt = getopt(argc, argv, "hf:s:m:n:u:g:d:r")) != -1) {
+    while ((opt = getopt(argc, argv, "hf:m:n:u:g:r:d:")) != -1) {
         switch(opt)
         {
             case 'h': help(); break;
@@ -281,8 +281,8 @@ main (int argc, char *argv[])
             case 'n': number = strtol(optarg, NULL, 10); break;
             case 'u': upper = strtol(optarg, NULL, 10);  break;
             case 'g': gap = strtol(optarg, NULL, 10); break;
+            case 'r': rounding = strtol(optarg, NULL, 10); break;
             case 'd': dimensions = optarg; break;
-            case 'r': reverse = true; break;
             default: help();
         }
     }
@@ -298,7 +298,6 @@ main (int argc, char *argv[])
         status = getline(&strings[i], &len, stdin);
 
         assert(status != -1);
-
         strings[i][strlen(strings[i])-1] = '\0';
     }
 
@@ -306,11 +305,11 @@ main (int argc, char *argv[])
     if (!font) printf("Font is required\n");
     if (!dimensions) dimensions = "300x300";
     if (margin < 0) margin = 5;
-    if (upper < 0) upper = 5;
+    if (rounding < 0) rounding = 0;
     parse(dimensions, &xpos, &ypos, &width, &height);
 
     // Create info on the heap.
-    struct Variables *info = var_create(font, reverse, margin, number, upper, gap, xpos, ypos, width, height);
+    struct Variables *info = var_create(font, margin, number, upper, gap, rounding, xpos, ypos, width, height);
 
     // Run until done.
     runner(info, strings);
