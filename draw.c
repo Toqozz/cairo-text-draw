@@ -80,7 +80,6 @@ parse(char *wxh, int *xpos, int *ypos, int *width, int *height)
     h = strsep(&dupe, "+");         // h = "10", dupe = "20+30"
     x = strsep(&dupe, "+");         // x = "20", dupe = "30"
     y = strsep(&dupe, "+");         // y = "30", dupe = ""
-    //printf("%sx%s+%s+%s\n", w,h,x,y);
 
     // Change variables 'globally' in memory. (*width and *height have memory addresses from main.).
     *xpos = strtol(x, NULL, 10);   // change value xpos is pointing to to something else.
@@ -88,8 +87,8 @@ parse(char *wxh, int *xpos, int *ypos, int *width, int *height)
     *width = strtol(w, NULL, 10);
     *height = strtol(h, NULL, 10);
 
-    // Free pointer after everytihng is done with it.
-    free(point);
+    // Free pointers after everything is done with it.
+    free(point);        // Points to dupe's old memory footprint?
     free(dupe);
 }
 
@@ -132,13 +131,11 @@ message_create(char *string, int textx, int texty, int x, int y)
     return message;
 }
 
-// Can be reused for both structs.
+// Free heap memory.
 void
 var_destroy(struct Variables *destroy)
 {
     assert(destroy != NULL);
-
-    //free(destroy->string);
     free(destroy);
 }
 
@@ -175,7 +172,7 @@ runner(struct Variables *info, char *strings[])
     struct MessageInfo messages[info->number];
     int i;
     for (i = 0; i < info->number; i++)
-        messages[i] = message_create (strings[i], 0, 0, -info->width-1, i*(info->height + info->gap));
+        messages[i] = message_create(strings[i], 0, 0, -info->width-1, i*(info->height + info->gap));
         //printf("messages%d: string:%s, x:%d, y:%d\n", i, strings[i], messages[i].x, messages[i].y);
 
     int running;
@@ -221,7 +218,6 @@ runner(struct Variables *info, char *strings[])
             //cairo_scale(context, -1, 1);
         }
 
-
         // Pop the group.
         cairo_pop_group_to_source(context);
 
@@ -233,13 +229,13 @@ runner(struct Variables *info, char *strings[])
         switch (check_x_event(surface, 0))
         {
             case -3053:
-                fprintf(stderr, "exposed\n");
+                //fprintf(stderr, "exposed\n");
                 break;
             case 0xff53:    // right cursor
-                fprintf(stderr, "right cursor pressed\n");
+                //fprintf(stderr, "right cursor pressed\n");
                 break;
             case 0xff51:    // left cursor
-                fprintf(stderr, "left cursor pressed\n"); //wtf is a cursor compared to a mouse button.
+                //fprintf(stderr, "left cursor pressed\n"); //wtf is a cursor compared to a mouse button.
                 break;
             case 0xff1b:    // esc
             case -1:        // left mouse button
@@ -253,18 +249,23 @@ runner(struct Variables *info, char *strings[])
     }
 
     // Destroy once done.
+    printf("reference count for context: %d\t(should be 1)\n", cairo_get_reference_count(context));
+    var_destroy(info);
+
+    g_object_unref(layout);
     cairo_destroy(context);
     destroy(surface);
-    var_destroy(info);
+
+    //cairo_debug_reset_static_data();
 }
 
 int
 main (int argc, char *argv[])
 {
     // Option initialization.
-    int  margin = 0, number = 0,
-         upper = 0, width = 0,
-         xpos = 0, ypos = 0,
+    int  margin = 0, number = 1,
+         upper = 0, xpos = 0,
+         ypos = 0, width = 0,
          height = 0, gap = 0,
          rounding = 0;
     char *font;
@@ -287,9 +288,9 @@ main (int argc, char *argv[])
         }
     }
 
+    char *strings[number];
 
     // Initialise to NULL and read stdin.  If the char is NULL, getline will do memory allocation automatically.
-    char *strings[number];
     int i;
     int status;
     unsigned long len;
@@ -306,6 +307,8 @@ main (int argc, char *argv[])
     if (!dimensions) dimensions = "300x300";
     if (margin < 0) margin = 5;
     if (rounding < 0) rounding = 0;
+
+    // Parse the dimensions string into relative variables.
     parse(dimensions, &xpos, &ypos, &width, &height);
 
     // Create info on the heap.
@@ -319,5 +322,4 @@ main (int argc, char *argv[])
         free(strings[i]);
 
     return(0);
-
 }
