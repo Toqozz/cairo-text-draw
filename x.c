@@ -145,7 +145,7 @@ destroy(cairo_surface_t *sfc)
 {
     Display *dsp = cairo_xlib_surface_get_display(sfc);
 
-    printf("refernce count for surface: %d\t(should be 1?)\n", cairo_surface_get_reference_count(sfc));
     cairo_surface_destroy(sfc);
+    cairo_debug_reset_static_data();
     XCloseDisplay(dsp);
 }

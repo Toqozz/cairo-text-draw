@@ -248,15 +248,18 @@ runner(struct Variables *info, char *strings[])
         nanosleep(&req, &req);
     }
 
+    g_object_unref(layout);
+
+    //fix
+    pango_cairo_font_map_set_default(NULL);
+
+
+    cairo_destroy(context);
+
     // Destroy once done.
-    printf("reference count for context: %d\t(should be 1)\n", cairo_get_reference_count(context));
     var_destroy(info);
 
-    g_object_unref(layout);
-    cairo_destroy(context);
     destroy(surface);
-
-    //cairo_debug_reset_static_data();
 }
 
 int
