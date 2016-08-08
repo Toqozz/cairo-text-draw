@@ -22,14 +22,14 @@
 // TODO replace with config options?
 // Interval = 33 = 30fps.
 #define QUEUESIZE 100
-#define INTERVAL 200
+#define INTERVAL 33
 
 // nanosleep and queue for messages.
 struct timespec req = {0, INTERVAL*1000000};
 struct MessageInfo MessageQueue[QUEUESIZE];
 
 // Fifo queue.
-int   rear = -1;
+int   rear = 0;
 int   front = -1;
 int   i;
 void queue_insert(struct MessageInfo message)
@@ -42,9 +42,9 @@ void queue_insert(struct MessageInfo message)
         if (front == -1)
             front = 0;
 
-        // There is a new item, the end is pushed back.
         // Add item to array.
-        MessageQueue[++rear] = message;
+        // There is a new item, the end is pushed back.
+        MessageQueue[rear++] = message;
     }
 }
 void queue_delete(int position)
@@ -56,7 +56,7 @@ void queue_delete(int position)
     // Move each item down one.
     else
     {
-        for (i = position; i < rear; i++)
+        for (i = position; i < rear-1; i++)
             MessageQueue[i] = MessageQueue[i+1];
         rear--;
     }
@@ -193,9 +193,12 @@ runner(struct Variables *info, char *strings[])
 
     //struct MessageInfo messages[info->number];
     int i;
-    for (i = 0; i < info->number; i++)
+    for (i = 0; i < info->number; i++){
         // string, text x, text y, x, y, fuse.
         queue_insert(message_create(strings[i], 0, 0, -info->width-1, i*(info->height + info->gap), info->timeout));
+        printf("String: %s, Fuse: %Lf\n", MessageQueue[i].string, MessageQueue[i].fuse);
+    }
+
 
     int running;
     int timepassed;
@@ -209,7 +212,7 @@ runner(struct Variables *info, char *strings[])
         // New group (everything is pre-rendered and then shown at the same time).
         cairo_push_group(context);
 
-        for (i = 0; i <= rear; i++)
+        for (i = 0; i < rear; i++)
         {
             // If the bar has reached the end, stop it.  Otherwise keep going.
             ++MessageQueue[i].x < 0 ? ((MessageQueue[i].x = MessageQueue[i].x/1.05)) : ((MessageQueue[i].x = 0));
@@ -260,10 +263,10 @@ runner(struct Variables *info, char *strings[])
                 break;
         }
 
-        for (i = 0; i <= rear; i++)
+        for (i = 0; i < rear; i++)
         {
-            MessageQueue[i].fuse = MessageQueue[i].fuse - (double) INTERVAL/1000;
             printf("Fuse: %Lf, Taking away: %f\n", MessageQueue[i].fuse, (double) INTERVAL/1000);
+            MessageQueue[i].fuse = MessageQueue[i].fuse - (double) INTERVAL/1000;
             if (MessageQueue[i].fuse <= 0)
                 queue_delete(i);
         }
